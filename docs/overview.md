@@ -1,4 +1,3 @@
-
 ---
 
 # 📄 `docs/overview.md`
@@ -15,11 +14,13 @@ used in this repository.
 
 Traditional LLM quantization treats weights as independent scalar values.
 Under this view:
+
 - Large-magnitude weights are assumed to carry more information.
 - Outliers are treated as special cases requiring protection.
 - Compression focuses on local heuristics (clipping, grouping, smoothing).
 
 However, this perspective struggles to explain why:
+
 - orthogonal rotations can eliminate outliers without information loss,
 - aggressive low-bit quantization often preserves model quality.
 
@@ -34,6 +35,7 @@ y = f(x; W)
 \]
 
 The weight tensor \(W\) should be interpreted as:
+
 - a **parameterization of the operator**, not
 - a collection of independent data points.
 
@@ -44,6 +46,7 @@ Compression is therefore a **reparameterization problem**, not a data deletion p
 ## 3. Manifold Hypothesis for LLM Weights
 
 We hypothesize that trained LLM weights:
+
 - lie on a low-dimensional nonlinear manifold \(\mathcal{M}\),
 - embedded in a high-dimensional parameter space.
 
@@ -54,6 +57,7 @@ W \approx \mu + J \theta
 \]
 
 where:
+
 - \(J\) spans the tangent space of the manifold,
 - \(\theta\) captures the meaningful degrees of freedom.
 
@@ -62,13 +66,16 @@ where:
 ## 4. Coordinate-Relative Outliers
 
 Outliers arise when:
+
 - the chosen coordinate axes are misaligned with the manifold’s tangent space,
 - curvature projects disproportionately onto a small number of axes.
 
 Thus:
+
 > **Outliers are coordinate artifacts, not intrinsic signals.**
 
 This explains why:
+
 - orthogonal rotations can dramatically change outlier statistics,
 - L2 energy is preserved while L∞ and kurtosis change.
 
@@ -94,11 +101,11 @@ as **coordinate rotations**, not frequency decompositions.
 
 We distinguish three regimes:
 
-1. **Original coordinates**  
+1. **Original coordinates**
    - spiky distributions, heavy tails.
-2. **Random rotations**  
+2. **Random rotations**
    - flattened distributions, reduced outliers.
-3. **Manifold-aligned coordinates**  
+3. **Manifold-aligned coordinates**
    - concentrated coefficients, low effective dimensionality.
 
 Rotation-based methods achieve (2), but optimal compression requires (3).
@@ -110,10 +117,10 @@ Rotation-based methods achieve (2), but optimal compression requires (3).
 Aligned coordinates allow weights to be decomposed as:
 
 \[
-w_i \approx f_\theta(i) + r_i
+w*i \approx f*\theta(i) + r_i
 \]
 
-- \(f_\theta\): structured, low-dimensional component.
+- \(f\_\theta\): structured, low-dimensional component.
 - \(r_i\): small residuals suitable for low-bit quantization
   and entropy coding.
 
@@ -125,6 +132,7 @@ This decomposition naturally aligns with rate–distortion optimal design.
 
 Controlled toy experiments (e.g., Fourier basis vs. MLP basis)
 demonstrate that:
+
 - the same function can admit vastly different parameter distributions
   depending on the chosen basis,
 - compression difficulty is a property of the representation,
@@ -137,6 +145,7 @@ These experiments provide intuition for analogous phenomena in LLMs.
 ## 9. Toward Manifold-Aware LLM Compression
 
 This repository explores:
+
 - practical approximations of manifold-aligned axes,
 - asymmetric quantization of structured vs. residual components,
 - unification of rotation, quantization, and entropy coding
@@ -148,4 +157,3 @@ This repository explores:
 
 > **LLM compression is fundamentally a coordinate selection problem
 > for operator parameters.**
-
