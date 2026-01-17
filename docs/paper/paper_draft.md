@@ -1,249 +1,227 @@
-# Axis-Transform and Manifold-Aligned Representation
+# 축 변환(axis transform)과 매니폴드-정렬(manifold-aligned) 표현
 
-## for Low-Bit LLM Quantization and Compression
-
----
-
-## Abstract
-
-Recent studies have demonstrated that large language models (LLMs) can be
-aggressively quantized to INT8 or even INT4 with minimal degradation in
-perplexity. This phenomenon is often attributed to heuristic outlier handling
-or the presumed low information content of trained weights. In this paper, we
-propose an alternative interpretation: LLM weights should be viewed as
-parameterizations of high-dimensional nonlinear operators lying on
-low-dimensional manifolds, and observed outliers are largely
-coordinate-dependent artifacts arising from misaligned representations.
-
-We reinterpret rotation-based quantization methods (e.g., QuaRot) as axis
-transformations rather than frequency-domain operations, and argue that while
-such rotations effectively flatten distributions, true compression gains arise
-from manifold-aligned coordinate systems that induce coefficient concentration.
-We support this view through (i) a controlled toy experiment comparing Fourier
-and MLP representations of sinusoidal functions, and (ii) empirical analysis on
-TinyLLaMA/SLM models demonstrating coordinate-relative outlier behavior and
-entropy reduction under axis transformations. Our findings suggest a unifying
-framework for LLM compression based on axis transformation, functional
-representation, and rate–distortion optimization.
+## 저비트 LLM 양자화 및 압축을 위한
 
 ---
 
-## 1. Introduction
+## 초록(Abstract)
 
-Quantization and compression are critical for deploying large language models
-under hardware, memory, and energy constraints. A growing body of work reports
-that even uniform low-bit quantization—down to INT4—can preserve model quality
-when combined with lightweight preprocessing such as outlier mitigation or
-rotation. These results challenge the traditional assumption that large-magnitude
-weights are intrinsically information-rich and must be carefully preserved.
+최근 연구들은 대규모 언어 모델(LLM)이 INT8, 심지어 INT4까지도 공격적으로 양자화될 수 있으며,
+퍼플렉시티(perplexity) 저하가 매우 작을 수 있음을 보여주었습니다.
+이 현상은 종종 휴리스틱 아웃라이어 처리나, 학습된 가중치가 담는 정보량이 낮다는 가정으로 설명됩니다.
+본 논문은 다른 해석을 제안합니다. 즉, LLM 가중치는 저차원 매니폴드(다양체) 위(또는 근처)에 놓인
+고차원 비선형 연산자의 파라미터화(parameterization)로 보아야 하며,
+관측되는 아웃라이어(outlier)는 정렬되지 않은 표현(representation)에서 비롯되는
+좌표계-의존 인공물(artifact)이라는 것입니다.
 
-Most existing approaches interpret weight quantization as a value-centric
-problem, focusing on protecting outliers or minimizing local quantization error.
-However, such interpretations struggle to explain why orthogonal rotations can
-eliminate outliers without information loss, or why different coordinate systems
-exhibit dramatically different quantization behavior.
-
-In this work, we argue that these phenomena arise because LLM weights are
-operator parameters rather than independent data points, and that compression
-efficiency is governed primarily by the choice of coordinate system. We propose
-a geometric framework in which trained weights lie on low-dimensional manifolds,
-outliers are coordinate-relative projections of manifold curvature, and optimal
-compression corresponds to aligning axes with the manifold’s tangent space.
+또한 본 논문은 QuaRot 등의 회전 기반 양자화 방법을 주파수 영역 연산이 아닌
+축 변환(axis transformation)으로 재해석합니다.
+회전이 분포를 효과적으로 평탄화(flattening)할 수는 있지만,
+진정한 압축 이득은 계수 집중(concentration)을 유도하는 매니폴드-정렬 좌표계에서 발생한다고 주장합니다.
+이를 위해 (i) 사인파 함수를 Fourier 표현과 MLP 표현으로 비교하는 통제된 토이 실험과,
+(ii) TinyLLaMA/SLM 모델에서 좌표계-상대적 아웃라이어 거동과 축 변환 하의 엔트로피 감소를 보이는
+경험적 분석을 제시합니다. 본 연구 결과는 축 변환, 함수적 표현, 레이트–왜곡(rate–distortion) 최적화에 기반한
+LLM 압축의 통합 프레임워크를 시사합니다.
 
 ---
 
-## 2. Related Work
+## 1. 서론(Introduction)
 
-### 2.1 Outlier-Aware Quantization
+양자화(quantization)와 압축(compression)은 하드웨어/메모리/에너지 제약 환경에서
+대규모 언어 모델을 배포하기 위해 필수적입니다.
+최근 연구들은 아웃라이어 완화(outlier mitigation)나 회전(rotation)과 같은 가벼운 전처리를 결합하면,
+INT4까지의 균일(uniform) 저비트 양자화도 모델 품질을 유지할 수 있음을 보고하고 있습니다.
+이 결과는 “큰 크기의 가중치는 본질적으로 정보가 풍부하므로 반드시 보호되어야 한다”는 전통적 가정을 흔듭니다.
 
-Early work on LLM quantization emphasizes handling outliers via clipping,
-group-wise scaling, or mixed-precision schemes. Methods such as SmoothQuant and
-GPTQ implicitly assume that large-magnitude weights are semantically important
-and require special treatment.
+대부분의 기존 접근은 가중치 양자화를 값(value) 중심 문제로 해석하여,
+아웃라이어를 보호하거나 국소적 양자화 오차를 최소화하는 데 집중합니다.
+하지만 이 해석만으로는 직교 회전(orthogonal rotation)이 정보 손실 없이 아웃라이어를 제거할 수 있는 이유,
+혹은 동일한 모델이라도 좌표계에 따라 양자화 거동이 크게 달라지는 이유를 설명하기 어렵습니다.
 
-### 2.2 Rotation-Based Quantization
-
-Recent approaches such as QuaRot, SpinQuant, and KurTail apply orthogonal
-transformations to weight matrices prior to quantization. These methods
-demonstrate that outliers can be suppressed without affecting inference
-accuracy, enabling uniform low-bit quantization across layers.
-
-However, these works largely treat rotation as a heuristic preprocessing step
-and do not provide a geometric explanation for why such transformations are
-effective.
-
-### 2.3 Limitations of Existing Views
-
-Prior work does not explicitly address:
-
-- the operator-level interpretation of weights,
-- the role of coordinate systems in inducing outliers,
-- or the relationship between axis alignment and rate–distortion optimality.
+본 논문은 이러한 현상이 LLM 가중치가 독립 데이터 포인트가 아니라 연산자(operator)의 파라미터이기 때문에 발생하며,
+압축 효율이 좌표계 선택에 의해 주로 결정된다고 주장합니다.
+또한 학습된 가중치가 저차원 매니폴드 위(또는 근처)에 놓이고,
+아웃라이어가 매니폴드 곡률(curvature)의 좌표계-상대적 투영(projection)이며,
+최적 압축은 매니폴드의 접공간(tangent space)에 축을 정렬하는 것에 대응한다는
+기하학적 프레임워크를 제안합니다.
 
 ---
 
-## 3. Operator-Centric View of LLM Weights
+## 2. 관련 연구(Related Work)
 
-An LLM implements a nonlinear operator of the form:
+### 2.1 아웃라이어-인식(outlier-aware) 양자화
+
+LLM 양자화 초기 연구들은 클리핑(clipping), 그룹 단위 스케일링(group-wise scaling),
+혼합 정밀도(mixed precision) 등을 통해 아웃라이어를 처리하는 데 초점을 맞췄습니다.
+SmoothQuant, GPTQ 등의 방법은 큰 크기의 가중치가 의미론적으로 중요하므로 특별히 다뤄야 한다는 가정을 암묵적으로 포함합니다.
+
+### 2.2 회전 기반 양자화(Rotation-Based Quantization)
+
+QuaRot, SpinQuant, KurTail과 같은 최근 접근은 양자화 전에 가중치 행렬에 직교 변환을 적용합니다.
+이 방법들은 추론 정확도를 해치지 않으면서 아웃라이어를 억제할 수 있음을 보이며,
+레이어 전반에서 균일 저비트 양자화를 가능하게 합니다.
+
+다만 이 연구들은 대체로 회전을 휴리스틱 전처리로 취급하며,
+왜 이러한 변환이 효과적인지에 대한 기하학적 설명을 제공하지는 않습니다.
+
+### 2.3 기존 관점의 한계
+
+선행연구는 다음을 명시적으로 다루지 않습니다.
+
+- 가중치의 연산자 수준(operator-level) 해석,
+- 아웃라이어를 유발하는 좌표계(coordinate system)의 역할,
+- 축 정렬(axis alignment)과 레이트–왜곡(rate–distortion) 최적성의 관계.
+ 
+즉, (i) 가중치의 연산자 수준 해석, (ii) 아웃라이어를 유발하는 좌표계의 역할,
+(iii) 축 정렬(alignment)과 레이트–왜곡 최적성의 관계가 명확히 정리되어 있지 않습니다.
+
+---
+
+## 3. LLM 가중치의 연산자 중심 관점(Operator-Centric View)
+
+LLM은 다음 형태의 비선형 연산자를 구현합니다.
 
 \[
 y = f(x; W)
 \]
 
-where \(W\) denotes the collection of weight tensors. From this perspective,
-weights are not data samples but coefficients parameterizing a function. The
-goal of compression is therefore not to preserve individual values, but to
-maintain the functional behavior of the operator.
+여기서 \(W\)는 가중치 텐서들의 모음을 의미합니다.
+이 관점에서 가중치는 데이터 샘플이 아니라 함수를 매개변수화하는 계수(coefficient)입니다.
+따라서 압축의 목표는 개별 값을 보존하는 것이 아니라 연산자의 기능적 동작을 유지하는 것입니다.
 
-This operator-centric view naturally suggests that different parameterizations
-of the same function may admit vastly different compression properties, even if
-they are functionally equivalent.
+이 연산자 중심 관점은 동일한 함수라도 파라미터화(parameterization)가 다르면,
+기능적으로는 동등하더라도 압축 특성이 크게 달라질 수 있음을 자연스럽게 시사합니다.
 
 ---
 
-## 4. Manifold Hypothesis and Coordinate-Relative Outliers
+## 4. 매니폴드 가설과 좌표계-상대적 아웃라이어(Manifold Hypothesis and Coordinate-Relative Outliers)
 
-### 4.1 Manifold Hypothesis for Weights
+### 4.1 가중치에 대한 매니폴드 가설
 
-We hypothesize that trained LLM weights lie on a low-dimensional nonlinear
-manifold \(\mathcal{M} \subset \mathbb{R}^N\). Locally, weights can be
-approximated as:
+학습된 LLM 가중치가 저차원 비선형 매니폴드 \(\mathcal{M} \subset \mathbb{R}^N\) 위(또는 근처)에 놓인다고 가정합니다.
+국소적으로는 가중치를 다음처럼 근사할 수 있습니다.
 
 \[
 W \approx \mu + J \theta,
 \quad \theta \in \mathbb{R}^d,\; d \ll N
 \]
 
-where \(J\) spans the tangent space of the manifold and \(\theta\) represents the
-meaningful degrees of freedom.
+여기서 \(J\)는 매니폴드 접공간(tangent space)을 span하고, \(\theta\)는 의미 있는 자유도(degrees of freedom)를 나타냅니다.
 
-### 4.2 Outliers as Projection Artifacts
+### 4.2 투영 인공물(projection artifact)로서의 아웃라이어
 
-In misaligned coordinate systems, curvature of the manifold projects unevenly
-onto axes, producing heavy-tailed distributions and apparent outliers. Since
-orthogonal transformations preserve L2 energy but alter L∞ and kurtosis,
-outliers must be interpreted as coordinate-dependent statistics rather than
-intrinsic information.
+정렬되지 않은 좌표계에서는 매니폴드 곡률이 축으로 불균일하게 투영되어
+heavy-tail 분포와 겉보기 아웃라이어를 만들어냅니다.
+직교 변환은 L2 에너지를 보존하지만 L∞ 및 첨도(kurtosis)를 바꾸므로,
+아웃라이어는 본질 정보(intrinsic information)가 아니라 좌표계-의존 통계로 해석되어야 합니다.
 
 ---
 
-## 5. Axis Transformations and Functional Decomposition
+## 5. 축 변환과 함수적 분해(Axis Transformations and Functional Decomposition)
 
-### 5.1 Axis Transformations
+### 5.1 축 변환(Axis Transformations)
 
-Orthogonal transformations \(T\) applied to weights yield:
+가중치에 직교 변환 \(T\)를 적용하면:
 
 \[
 W' = T W
 \]
 
-Hadamard-based transforms, commonly used in recent quantization work, are
-instances of such axis transformations. They redistribute energy across
-coordinates without loss of information.
+최근 양자화 연구에서 흔히 쓰이는 Hadamard 기반 변환은 이러한 축 변환의 한 예입니다.
+이는 정보 손실 없이 좌표들 사이에 에너지를 재분배합니다.
 
-### 5.2 From Flattening to Concentration
+### 5.2 평탄화(flattening)에서 집중(concentration)으로
 
-We distinguish three regimes:
+우리는 다음 3가지 상태(regime)를 구분합니다.
 
-1. Original coordinates: spiky, heavy-tailed distributions.
-2. Random rotations: flattened distributions with reduced outliers.
-3. Manifold-aligned coordinates: concentrated representations with low effective
-   dimensionality.
+1. 원래 좌표계: 뾰족하고 heavy-tail인 분포.
+2. 랜덤 회전: 평탄화된 분포와 감소한 아웃라이어.
+3. 매니폴드-정렬 좌표계: 낮은 유효 차원을 갖는 집중된 표현.
 
-While random rotations achieve regime (2), optimal compression requires regime
-(3).
+랜덤 회전은 (2)를 달성하지만, 최적 압축은 (3)을 요구합니다.
 
-### 5.3 Functional + Residual Representation
+### 5.3 함수 성분 + 잔차(residual) 표현
 
-Aligned coordinates enable a decomposition:
+정렬된 좌표계에서는 다음 분해가 가능합니다.
 
 \[
 W_i \approx f_\theta(i) + r_i
 \]
 
-where \(f\_\theta\) captures structured, low-dimensional variation and \(r_i\)
-represents small residuals suitable for aggressive quantization and entropy
-coding.
+여기서 \(f\_\theta\)는 구조적이고 저차원인 변화를 담고, \(r_i\)는 공격적 양자화 및 엔트로피 코딩(entropy coding)에 적합한 작은 잔차를 나타냅니다.
 
 ---
 
-## 6. Toy Experiment: Fourier vs. MLP Representations
+## 6. 토이 실험: Fourier vs. MLP 표현(Toy Experiment)
 
-### 6.1 Setup
+### 6.1 설정(Setup)
 
-We construct signals as weighted sums of sinusoids with varying amplitudes,
-frequencies, and phases. The same function is represented using:
+진폭/주파수/위상이 다양한 사인파들의 가중합으로 신호를 구성하고, 같은 함수를 다음 두 방식으로 표현합니다.
 
-1. A Fourier basis (ground-truth aligned basis).
-2. A multilayer perceptron (MLP) with ReLU activations.
+1. Fourier 기저(정답 수준의 정렬 기저).
+2. ReLU 활성함수를 갖는 다층 퍼셉트론(MLP).
 
-### 6.2 Results
+### 6.2 결과(Results)
 
-The Fourier representation exhibits strong coefficient concentration and low
-entropy, while the MLP representation distributes parameters across many
-dimensions. Applying orthogonal rotations to MLP parameters reduces outliers but
-does not recover Fourier-level concentration.
+Fourier 표현은 강한 계수 집중과 낮은 엔트로피를 보이는 반면,
+MLP 표현은 파라미터가 많은 차원으로 분산됩니다.
+MLP 파라미터에 직교 회전을 적용하면 아웃라이어는 줄지만,
+Fourier 수준의 집중(concentration)은 복원되지 않습니다.
 
-### 6.3 Implications
+### 6.3 시사점(Implications)
 
-This experiment demonstrates that compression difficulty depends on the chosen
-basis rather than the function itself, providing intuition for analogous
-phenomena in LLMs.
+이 실험은 압축 난이도가 함수 자체가 아니라 선택한 기저(basis)에 의존함을 보여주며,
+LLM에서의 유사 현상을 이해하기 위한 직관을 제공합니다.
 
 ---
 
-## 7. Validation on TinyLLaMA and Small Language Models
+## 7. TinyLLaMA 및 소형 언어 모델 검증(Validation)
 
-### 7.1 Experimental Setup
+### 7.1 실험 설정(Experimental Setup)
 
-We analyze weight matrices from TinyLLaMA and SLM checkpoints, focusing on FFN
-and attention projection layers. We evaluate original coordinates, Hadamard
-rotations, and optional PCA-aligned axes.
+TinyLLaMA 및 SLM 체크포인트의 가중치 행렬을 분석하되, FFN과 어텐션 프로젝션 레이어에 집중합니다.
+원래 좌표계, Hadamard 회전, (선택적으로) PCA-정렬 축을 비교 평가합니다.
 
-### 7.2 Metrics
+### 7.2 지표(Metrics)
 
-We measure outlier statistics, histogram entropy, Huffman proxy bitrates, and
-top-k energy ratios as proxies for concentration.
+집중(concentration)의 대리 지표로서 아웃라이어 통계, 히스토그램 엔트로피, Huffman proxy 비트레이트, top-k 에너지 비율을 측정합니다.
 
-### 7.3 Observations
+### 7.3 관찰(Observations)
 
-Hadamard rotations consistently reduce outlier metrics and entropy, confirming
-their role as coordinate transformations. PCA-aligned axes further increase
-energy concentration, consistent with the manifold-alignment hypothesis.
+Hadamard 회전은 일관되게 아웃라이어 지표와 엔트로피를 감소시키며,
+좌표 변환으로서의 역할을 확인해 줍니다.
+또한 PCA-정렬 축은 에너지 집중을 더 증가시키며, 이는 매니폴드-정렬 가설과 일치합니다.
 
 ---
 
-## 8. Discussion
+## 8. 논의(Discussion)
 
-Our results suggest a unifying interpretation of recent low-bit quantization
-successes. Rotation-based methods flatten distributions but do not explicitly
-align with the underlying manifold. True compression gains arise from axis
-alignment that induces concentration, enabling functional decomposition and
-asymmetric quantization.
+본 연구 결과는 최근 저비트 양자화의 성공을 통합적으로 해석할 수 있음을 시사합니다.
+회전 기반 방법은 분포를 평탄화하지만, 기반 매니폴드에 명시적으로 정렬되지는 않습니다.
+진정한 압축 이득은 집중(concentration)을 유도하는 축 정렬에서 발생하며,
+이는 함수적 분해와 비대칭(asymmetric) 양자화를 가능하게 합니다.
 
-This perspective reframes quantization as a reparameterization problem rather
-than a value-clipping problem.
+이 관점은 양자화를 값 클리핑(value-clipping) 문제가 아니라 재매개변수화(reparameterization) 문제로 재정의합니다.
 
 ---
 
-## 9. Conclusion
+## 9. 결론(Conclusion)
 
-We presented a coordinate-centric framework for LLM weight quantization and
-compression. By viewing weights as operator parameters lying on low-dimensional
-manifolds, we reinterpret outliers as coordinate artifacts and rotation-based
-methods as axis transformations. Our toy experiments and TinyLLaMA analyses
-demonstrate that basis alignment governs coefficient concentration and
-compression efficiency. This framework opens new directions for manifold-aware
-LLM compression methods that go beyond heuristic outlier handling.
-
----
-
-## Acknowledgements
-
-(To be added.)
+본 논문은 LLM 가중치 양자화 및 압축을 위한 좌표계 중심(coordinate-centric) 프레임워크를 제시했습니다.
+가중치를 저차원 매니폴드 위의 연산자 파라미터로 보고,
+아웃라이어를 좌표계 인공물로, 회전 기반 방법을 축 변환으로 재해석했습니다.
+토이 실험과 TinyLLaMA 분석은 기저 정렬이 계수 집중과 압축 효율을 좌우함을 보여줍니다.
+이 프레임워크는 휴리스틱 아웃라이어 처리(outlier handling)를 넘어서는
+매니폴드-인식(manifold-aware) LLM 압축 방법의 새로운 방향을 엽니다.
 
 ---
 
-## References
+## 감사의 글(Acknowledgements)
 
-(To be added.)
+(추가 예정.)
+
+---
+
+## 참고문헌(References)
+
+(추가 예정.)
