@@ -1,139 +1,127 @@
-# Coordinate-Relative Nature of Outliers
+# 아웃라이어의 좌표계-상대적 성질
 
 ---
 
-## 1. The Conventional Interpretation of Outliers
+## 1. 아웃라이어에 대한 통상적 해석
 
-In most LLM quantization literature, outliers are defined operationally:
-weights with unusually large magnitudes relative to the bulk distribution.
+대부분의 LLM 양자화 문헌에서 아웃라이어는 실용적(operational) 정의로 등장합니다.
+즉, 전체 분포의 다수(bulk)에 비해 비정상적으로 큰 크기를 갖는 가중치를 의미합니다.
 
-This leads to common assumptions:
+이로 인해 다음과 같은 흔한 가정이 생깁니다.
 
-- large-magnitude weights are more important,
-- outliers encode rare but critical information,
-- quantization must preserve or isolate these values.
+- 큰 크기의 가중치가 더 중요하고,
+- 아웃라이어가 희귀하지만 결정적인 정보를 담고 있으며,
+- 양자화는 이 값을 보존/격리해야 한다는 가정.
 
-As a result, many methods focus on:
+그 결과 많은 방법들이 다음에 집중합니다.
 
-- clipping thresholds,
-- mixed-precision handling,
-- outlier-aware scaling.
+- 클리핑 임계값,
+- 혼합 정밀도(mixed precision) 처리,
+- 아웃라이어-인식(outlier-aware) 스케일링.
 
-However, these approaches implicitly assume that
-**magnitude correlates with semantic importance**.
-
----
-
-## 2. Empirical Contradictions
-
-Several empirical observations challenge this assumption:
-
-1. Orthogonal rotations (e.g., Hadamard) can drastically reduce or eliminate
-   outliers without affecting model accuracy.
-2. Uniform low-bit quantization often works even when outliers are not preserved.
-3. Different coordinate systems exhibit radically different tail statistics
-   for the same trained model.
-
-These facts imply that outliers are not intrinsic properties of the operator,
-but depend on how it is parameterized.
+하지만 이러한 접근은 암묵적으로 **크기(magnitude)가 의미론적 중요도(semantic importance)와 상관된다**고 가정합니다.
 
 ---
 
-## 3. Outliers as Coordinate Projections
+## 2. 경험적 모순
 
-Let \( W \in \mathbb{R}^N \) be a parameter vector representing an operator.
-Consider a change of coordinates via an orthogonal transform \( T \):
+여러 경험적 관측은 이 가정을 반박합니다.
+
+1. 직교 회전(예: Hadamard)은 모델 정확도에 영향을 주지 않으면서도 아웃라이어를 크게 줄이거나 제거할 수 있습니다.
+2. 아웃라이어를 특별히 보존하지 않아도 균일(uniform) 저비트 양자화가 종종 잘 동작합니다.
+3. 동일한 학습 모델이라도 좌표계에 따라 tail 통계가 급격히 달라집니다.
+
+이 사실들은 아웃라이어가 연산자의 본질적 성질이 아니라, **어떻게 파라미터화했는지**에 의존한다는 점을 의미합니다.
+
+---
+
+## 3. 좌표 투영으로서의 아웃라이어
+
+연산자를 나타내는 파라미터 벡터 \( W \in \mathbb{R}^N \)를 생각해 봅시다.
+직교 변환 \( T \)로 좌표계를 바꾸면:
 
 \[
 W' = T W, \quad T^\top T = I
 \]
 
-Then:
+이때:
 
-- \( \|W'\|\_2 = \|W\|\_2 \) (energy preserved),
-- \( \|W'\|\_\infty \), kurtosis, and tail statistics may change arbitrarily.
+- \( \|W'\|\_2 = \|W\|\_2 \) (에너지 보존),
+- \( \|W'\|\_\infty \), 첨도(kurtosis), tail 통계는 임의로 바뀔 수 있습니다.
 
-If outliers were intrinsic information carriers,
-such drastic changes would alter model behavior.
-Since they do not, outliers must be **coordinate-dependent statistics**.
+만약 아웃라이어가 정보의 본질적 운반자라면, 이렇게 통계가 크게 바뀌는 것은 모델 동작을 바꿔야 합니다.
+하지만 그렇지 않으므로, 아웃라이어는 **좌표계-의존 통계**여야 합니다.
 
 ---
 
-## 4. Geometric Interpretation via Manifolds
+## 4. 매니폴드(다양체)를 통한 기하학적 해석
 
-Assume that trained weights lie near a low-dimensional manifold
-\(\mathcal{M} \subset \mathbb{R}^N\).
+학습된 가중치가 저차원 매니폴드 \(\mathcal{M} \subset \mathbb{R}^N\) 근처에 놓인다고 가정합니다.
 
-Locally:
+국소적으로:
 \[
 W \approx \mu + J \theta
 \]
-where:
+여기서:
 
-- \(J\) spans the tangent space of \(\mathcal{M}\),
-- \(\theta\) parameterizes meaningful variation.
+- \(J\)는 \(\mathcal{M}\)의 접공간(tangent space)을 span하고,
+- \(\theta\)는 의미 있는 변화를 매개변수화합니다.
 
-Outliers arise when:
+아웃라이어는 다음 상황에서 발생합니다.
 
-- coordinate axes are misaligned with the tangent space,
-- curvature directions project disproportionately onto a few axes.
+- 좌표축이 접공간과 정렬되지 않을 때,
+- 곡률 방향이 소수의 축으로 불균형하게 투영될 때.
 
-In this view:
+이 관점에서는:
 
-- outliers correspond to **high curvature projections**,
-- not to inherently important degrees of freedom.
+- 아웃라이어는 **고곡률 투영(high curvature projection)**에 해당하며,
+- 본질적으로 중요한 자유도를 의미하지 않습니다.
 
 ---
 
-## 5. Sensitivity vs. Magnitude
+## 5. 민감도(sensitivity) vs 크기(magnitude)
 
-From an operator-centric perspective,
-the importance of a parameter direction is determined by sensitivity:
+연산자 중심 관점에서는 파라미터 방향의 중요도가 민감도(sensitivity)로 결정됩니다.
 
 \[
 \text{Sensitivity}(v) \approx \left\| \frac{\partial f}{\partial W} v \right\|
 \]
 
-Large coordinate values do not necessarily imply
-high sensitivity directions.
+좌표값이 크다고 해서 고민감 방향이라는 뜻은 아닙니다.
 
-A large-magnitude parameter may lie in a direction
-to which the operator is relatively insensitive,
-while a small-magnitude parameter may lie along
-a highly sensitive direction.
+큰 크기의 파라미터가 연산자가 상대적으로 둔감한 방향에 놓일 수 있는 반면,
+작은 크기의 파라미터가 매우 민감한 방향에 놓일 수도 있습니다.
 
-Thus:
+따라서:
 
-> **Magnitude is not a reliable proxy for importance.**
+> **크기(magnitude)는 중요도의 신뢰할 만한 대리변수(proxy)가 아니다.**
 
 ---
 
-## 6. Why Rotations Remove Outliers
+## 6. 왜 회전이 아웃라이어를 줄이는가
 
-Orthogonal rotations redistribute parameter energy
-across coordinates without altering the operator.
+직교 회전은 연산자를 바꾸지 않으면서 파라미터 에너지를 좌표들 사이에 재분배합니다.
 
-If outliers arise from axis misalignment,
-random rotations tend to:
+만약 아웃라이어가 축 정렬 불일치(axis misalignment)에서 발생한다면,
+랜덤 회전은 대체로 다음과 같은 경향을 보입니다.
 
-- spread curvature-induced projections,
-- reduce peak magnitudes,
-- flatten heavy-tailed distributions.
+- 곡률 유발 투영(curvature-induced projection)을 퍼뜨리고,
+- 피크 크기를 낮추며,
+- heavy-tail 분포를 평탄화합니다.
 
-This explains why:
+이로 인해 다음이 설명됩니다.
 
-- Hadamard-based rotations suppress outliers,
-- kurtosis and entropy decrease,
-- model accuracy remains unchanged.
+- Hadamard 기반 회전이 아웃라이어를 억제하고,
+- 첨도(kurtosis)와 엔트로피가 감소하며,
+- 모델 정확도는 변하지 않을 수 있습니다.
 
-However, this flattening does not imply
-that the new coordinates are semantically meaningful.
+하지만 이러한 평탄화가 새 좌표가 의미론적으로 “의미 있다”는 뜻은 아닙니다.
 
 ---
 
-## 7. Flattening vs. Concentration
+## 7. 평탄화(flattening) vs 집중(concentration)
 
-It is important to distinguish between two effects:
+두 효과를 구분하는 것이 중요합니다.
 
 1. **Flattening**
    - energy spread uniformly,
@@ -145,54 +133,56 @@ It is important to distinguish between two effects:
    - low effective dimensionality,
    - requires alignment with the manifold structure.
 
-Rotation-based methods primarily achieve flattening.
-Compression-optimal representations require concentration.
+회전 기반 방법은 주로 평탄화(flattening)를 달성합니다.
+압축 관점에서 최적인 표현은 집중(concentration)을 필요로 합니다.
 
 ---
 
-## 8. Implications for Quantization
+## 8. 양자화에 대한 함의
 
-Quantization error interacts with coordinate geometry:
+양자화 오차는 좌표 기하(geometry)와 상호작용합니다.
 
-- In misaligned coordinates:
-  - outliers dominate scale selection,
-  - quantization error is unevenly distributed.
+- 정렬되지 않은 좌표계에서는:
+  - 아웃라이어가 스케일(scale) 선택을 지배하고,
+  - 양자화 오차가 불균일하게 분포합니다.
 
-- In flattened coordinates:
-  - quantization is more stable,
-  - but not necessarily optimal in rate–distortion terms.
+- 평탄화된 좌표계에서는:
+  - 양자화가 더 안정적이지만,
+  - 레이트–왜곡(rate–distortion) 관점에서 반드시 최적은 아닙니다.
 
-- In manifold-aligned coordinates:
-  - important variations are isolated,
-  - residuals can be aggressively quantized.
+- 매니폴드-정렬 좌표계에서는:
+  - 중요한 변화(variation)가 분리되고,
+  - 잔차(residual)를 공격적으로 양자화할 수 있습니다.
 
-Thus, outlier-aware quantization should be replaced by
-**coordinate-aware reparameterization**.
-
----
-
-## 9. Reframing Outlier Mitigation
-
-Rather than asking:
-
-> “How do we preserve outliers?”
-
-we should ask:
-
-> “Why do outliers appear in this coordinate system?”
-
-This reframing shifts focus from local heuristics
-to global geometric structure.
+따라서 아웃라이어-인식(outlier-aware) 양자화는
+**좌표계-인식(coordinate-aware) 재매개변수화**로 대체되어야 합니다.
 
 ---
 
-## Takeaway
+## 9. 아웃라이어 완화(outlier mitigation)의 재구성
+
+다음처럼 묻기보다:
+
+> “아웃라이어를 어떻게 보존할 것인가?”
+
+오히려 다음을 물어야 합니다.
+
+> “왜 이 좌표계에서 아웃라이어가 나타나는가?”
+
+이 재구성은 국소 휴리스틱에서 전역 기하 구조로 관심을 옮깁니다.
+
+---
+
+## 핵심 요약
 
 > **Outliers are not intrinsic properties of LLM operators,
 > but artifacts of misaligned coordinate systems.**
+>
+> **아웃라이어는 LLM 연산자의 본질적 성질이 아니라,
+> 정렬되지 않은 좌표계가 만들어내는 인공물이다.**
 
-Recognizing outliers as coordinate-relative phenomena
-opens the door to principled compression strategies
-based on axis alignment and manifold-aware representations.
+아웃라이어를 좌표계-상대적 현상으로 인식하면,
+축 정렬(axis alignment)과 매니폴드-인식(manifold-aware) 표현에 기반한
+원칙적인 압축 전략으로 이어질 수 있습니다.
 
 ---

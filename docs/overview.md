@@ -1,159 +1,154 @@
----
+# 개요: 연산자 좌표계 압축(Operator Coordinate Compression)
 
-# 📄 `docs/overview.md`
+이 문서는 이 리포지토리에서 사용하는 개념적 프레임워크를 고수준에서 요약합니다.
 
-```markdown
-# Overview: Operator Coordinate Compression
-
-This document provides a high-level overview of the conceptual framework
-used in this repository.
+권장 읽기 순서와 문서 지도는 `docs/index.md`부터 시작하세요.
 
 ---
 
-## 1. The Problem with Value-Centric Thinking
+## 1. 값(value) 중심 사고의 문제
 
-Traditional LLM quantization treats weights as independent scalar values.
-Under this view:
+전통적인 LLM 양자화는 가중치를 서로 독립인 스칼라 값으로 취급합니다.
+이 관점에서는:
 
-- Large-magnitude weights are assumed to carry more information.
-- Outliers are treated as special cases requiring protection.
-- Compression focuses on local heuristics (clipping, grouping, smoothing).
+- 큰 크기의 가중치가 더 많은 정보를 담는다고 가정하고,
+- 아웃라이어(outlier)를 보호해야 할 특수 케이스로 취급하며,
+- 압축은 국소적 휴리스틱(클리핑, 그룹핑, 스무딩)에 집중합니다.
 
-However, this perspective struggles to explain why:
+하지만 이 관점만으로는 다음 현상을 설명하기 어렵습니다.
 
-- orthogonal rotations can eliminate outliers without information loss,
-- aggressive low-bit quantization often preserves model quality.
+- 직교 회전(orthogonal rotation)으로 정보 손실 없이 아웃라이어가 사라질 수 있고,
+- 공격적인 저비트 양자화가 종종 모델 품질을 유지한다는 점.
 
 ---
 
-## 2. Operator-Centric View
+## 2. 연산자(operator) 중심 관점
 
-An LLM implements a nonlinear operator:
+LLM은 다음 형태의 비선형 연산자를 구현합니다.
 
 \[
 y = f(x; W)
 \]
 
-The weight tensor \(W\) should be interpreted as:
+가중치 텐서 \(W\)는 다음처럼 해석해야 합니다.
 
-- a **parameterization of the operator**, not
-- a collection of independent data points.
+- 독립 데이터 포인트들의 집합이 아니라,
+- **연산자의 매개변수화(parameterization)**.
 
-Compression is therefore a **reparameterization problem**, not a data deletion problem.
+따라서 압축은 데이터 삭제 문제가 아니라 **재매개변수화(reparameterization) 문제**입니다.
 
 ---
 
-## 3. Manifold Hypothesis for LLM Weights
+## 3. LLM 가중치에 대한 매니폴드(다양체) 가설
 
-We hypothesize that trained LLM weights:
+학습된 LLM 가중치는 다음을 만족한다고 가정합니다.
 
-- lie on a low-dimensional nonlinear manifold \(\mathcal{M}\),
-- embedded in a high-dimensional parameter space.
+- 고차원 파라미터 공간 안에 놓인 저차원 비선형 매니폴드 \(\mathcal{M}\) 근처에 있고,
+- 국소적으로는 더 낮은 자유도로 근사될 수 있습니다.
 
-Locally, weights can be approximated as:
+국소적으로는 가중치를 다음처럼 근사할 수 있습니다.
 
 \[
 W \approx \mu + J \theta
 \]
 
-where:
+여기서:
 
-- \(J\) spans the tangent space of the manifold,
-- \(\theta\) captures the meaningful degrees of freedom.
-
----
-
-## 4. Coordinate-Relative Outliers
-
-Outliers arise when:
-
-- the chosen coordinate axes are misaligned with the manifold’s tangent space,
-- curvature projects disproportionately onto a small number of axes.
-
-Thus:
-
-> **Outliers are coordinate artifacts, not intrinsic signals.**
-
-This explains why:
-
-- orthogonal rotations can dramatically change outlier statistics,
-- L2 energy is preserved while L∞ and kurtosis change.
+- \(J\)는 매니폴드의 접공간(tangent space)을 span하고,
+- \(\theta\)는 의미 있는 자유도를 담습니다.
 
 ---
 
-## 5. Axis Transformations vs. Frequency Transforms
+## 4. 좌표계-상대적 아웃라이어
 
-- Frequency transforms (DCT, FFT):
-  - assume meaningful physical axes,
-  - aim to separate semantic frequencies,
-  - are typically lossy.
-- Axis transformations (Hadamard, rotation):
-  - preserve information,
-  - redistribute energy across coordinates,
-  - have no semantic frequency interpretation.
+아웃라이어는 다음 상황에서 발생합니다.
 
-In LLM compression, Hadamard-based methods should be understood
-as **coordinate rotations**, not frequency decompositions.
+- 선택된 좌표축이 매니폴드 접공간과 정렬되지 않을 때,
+- 곡률(curvature)이 소수의 축으로 과도하게 투영될 때.
 
----
+따라서:
 
-## 6. From Flattening to Concentration
+> **아웃라이어는 본질 신호가 아니라 좌표계 인공물이다.**
 
-We distinguish three regimes:
+이는 다음을 설명합니다.
 
-1. **Original coordinates**
-   - spiky distributions, heavy tails.
-2. **Random rotations**
-   - flattened distributions, reduced outliers.
-3. **Manifold-aligned coordinates**
-   - concentrated coefficients, low effective dimensionality.
-
-Rotation-based methods achieve (2), but optimal compression requires (3).
+- 직교 회전이 아웃라이어 통계를 크게 바꿀 수 있고,
+- L2 에너지는 보존되지만 L∞와 첨도(kurtosis)는 바뀔 수 있습니다.
 
 ---
 
-## 7. Functional + Residual Representation
+## 5. 축 변환(axis) vs 주파수 변환(frequency)
 
-Aligned coordinates allow weights to be decomposed as:
+- 주파수 변환(DCT, FFT):
+  - 물리적으로 의미 있는 축을 가정하고,
+  - 의미론적 주파수 분리를 목표로 하며,
+  - 보통 손실(lossy)입니다.
+- 축 변환(Hadamard, 회전):
+  - 정보를 보존하고,
+  - 좌표들 사이에 에너지를 재분배하며,
+  - 의미론적 주파수 해석이 없습니다.
+
+LLM 압축에서 Hadamard 기반 방법은 주파수 분해가 아니라 **좌표 회전(coordinate rotation)**으로 이해하는 편이 정확합니다.
+
+---
+
+## 6. 평탄화(flattening)에서 집중(concentration)으로
+
+우리는 다음 3가지 상태(regime)를 구분합니다.
+
+1. **원래 좌표계**
+   - 뾰족한 분포, heavy tail.
+2. **랜덤 회전**
+   - 분포 평탄화, 아웃라이어 감소.
+3. **매니폴드-정렬 좌표계**
+   - 계수 집중, 낮은 유효 차원(effective dimensionality).
+
+회전 기반 방법은 (2)를 달성하지만, 최적 압축은 (3)을 요구합니다.
+
+---
+
+## 7. 함수적 성분 + 잔차(residual) 표현
+
+정렬된 좌표계에서는 가중치를 다음처럼 분해할 수 있습니다.
 
 \[
-w*i \approx f*\theta(i) + r_i
+W_i \approx f_\theta(i) + r_i
 \]
 
-- \(f\_\theta\): structured, low-dimensional component.
-- \(r_i\): small residuals suitable for low-bit quantization
-  and entropy coding.
+- \(f\_\theta\): 구조적이고 저차원인 성분.
+- \(r_i\): 저비트 양자화 및 엔트로피 코딩(entropy coding)에 적합한 작은 잔차.
 
-This decomposition naturally aligns with rate–distortion optimal design.
-
----
-
-## 8. Why Toy Experiments Matter
-
-Controlled toy experiments (e.g., Fourier basis vs. MLP basis)
-demonstrate that:
-
-- the same function can admit vastly different parameter distributions
-  depending on the chosen basis,
-- compression difficulty is a property of the representation,
-  not the function itself.
-
-These experiments provide intuition for analogous phenomena in LLMs.
+이 분해는 레이트–왜곡(rate–distortion) 최적 설계와 자연스럽게 연결됩니다.
 
 ---
 
-## 9. Toward Manifold-Aware LLM Compression
+## 8. 토이 실험이 중요한 이유
 
-This repository explores:
+통제된 토이 실험(예: Fourier basis vs. MLP basis)은 다음을 보여줍니다.
 
-- practical approximations of manifold-aligned axes,
-- asymmetric quantization of structured vs. residual components,
-- unification of rotation, quantization, and entropy coding
-  under a single coordinate-centric framework.
+- 같은 함수라도 기저(basis)에 따라 파라미터 분포가 크게 달라질 수 있고,
+- 압축 난이도는 함수 자체가 아니라 표현(representation)의 성질이라는 점.
+
+이 실험들은 LLM에서의 유사 현상을 이해하기 위한 직관을 제공합니다.
 
 ---
 
-## Takeaway
+## 9. 매니폴드-인식(manifold-aware) LLM 압축으로
 
-> **LLM compression is fundamentally a coordinate selection problem
-> for operator parameters.**
+이 리포지토리는 다음을 탐구합니다.
+
+- 매니폴드-정렬 축의 실용적 근사,
+- 구조 성분과 잔차 성분의 비대칭(asymmetric) 양자화,
+- 회전/양자화/엔트로피 코딩을 하나의 좌표계 중심 프레임으로 통합.
+
+---
+
+## 핵심 요약
+
+> **LLM 압축은 본질적으로 연산자 파라미터의 좌표계 선택 문제다.**
+ 
+## 다음 읽을거리
+
+- 이론: `docs/theory/operator_view.md`, `docs/theory/coordinate_relative_outliers.md`, `docs/theory/rotation_vs_alignment.md`, `docs/theory/manifold_alignment.md`
+- 논문 초안: `docs/paper/paper_draft.md`
+- 토이 실험 스펙: `experiments/toy_basis_vs_mlp/spec.md`

@@ -1,227 +1,221 @@
-# Manifold-Aligned Coordinate Systems
+# 매니폴드-정렬 좌표계(Manifold-Aligned Coordinate Systems)
 
-## From Rotation to Structural Compression
-
----
-
-## 1. What Do We Mean by “Alignment”?
-
-In this repository, **alignment** refers to the choice of a coordinate system
-that is adapted to the intrinsic structure of the operator parameter space.
-
-Formally, let:
-
-- \( W \in \mathbb{R}^N \): parameter vector of an LLM operator,
-- \( \mathcal{M} \subset \mathbb{R}^N \): a low-dimensional manifold on which
-  trained parameters concentrate.
-
-A coordinate system is said to be **manifold-aligned** if its axes are
-approximately aligned with:
-
-- the tangent space of \(\mathcal{M}\),
-- or other low-sensitivity / low-curvature directions.
-
-Alignment is therefore a **geometric property**, not a statistical one.
+## 회전에서 구조적 압축으로
 
 ---
 
-## 2. Manifold Hypothesis for Operator Parameters
+## 1. 여기서 말하는 “정렬(alignment)”이란?
 
-We adopt the following hypothesis:
+이 리포지토리에서 **정렬(alignment)**은 연산자 파라미터 공간의 내재적 구조에 적응(adapted)된
+좌표계를 선택하는 것을 의미합니다.
 
-> **Trained LLM weights lie near a low-dimensional, curved manifold
-> embedded in high-dimensional parameter space.**
+형식적으로는 다음을 두고 설명할 수 있습니다.
 
-This hypothesis is supported by:
+- \( W \in \mathbb{R}^N \): LLM 연산자의 파라미터 벡터
+- \( \mathcal{M} \subset \mathbb{R}^N \): 학습된 파라미터가 집중되는 저차원 매니폴드(다양체)
 
-- robustness to noise and quantization,
-- flat minima in loss landscapes,
-- empirical success of low-rank approximations and pruning.
+어떤 좌표계의 축이 다음과 대략 정렬되어 있으면 그 좌표계를 **매니폴드-정렬(manifold-aligned)**이라고 부릅니다.
 
-Locally, around a trained solution \(W_0\), we can write:
+- \(\mathcal{M}\)의 접공간(tangent space)
+- 또는 저민감(low-sensitivity) / 저곡률(low-curvature) 방향
+
+따라서 정렬은 통계적 성질이 아니라 **기하학적 성질**입니다.
+
+---
+
+## 2. 연산자 파라미터에 대한 매니폴드 가설
+
+본 리포지토리는 다음 가설을 채택합니다.
+
+> **학습된 LLM 가중치는 고차원 파라미터 공간에 임베딩된
+> 저차원 곡선 매니폴드(curved manifold) 근처에 놓인다.**
+
+이 가설은 다음 사실들로 뒷받침됩니다.
+
+- 잡음 및 양자화에 대한 강인성,
+- 손실 지형(loss landscape)에서의 평평한 최소점(flat minima),
+- 저랭크 근사 및 프루닝(pruning)의 경험적 성공.
+
+학습된 해 \(W_0\) 주변에서 국소적으로는 다음처럼 쓸 수 있습니다.
 \[
 W \approx W_0 + J \theta + \epsilon
 \]
-where:
+여기서:
 
-- \(J \in \mathbb{R}^{N \times d}\) spans the tangent space,
-- \(\theta \in \mathbb{R}^d\) are intrinsic coordinates,
-- \(\epsilon\) is a small residual orthogonal to the manifold.
-
----
-
-## 3. Alignment vs. Rotation: A Geometric Contrast
-
-### 3.1 Rotation
-
-Rotation chooses an arbitrary orthonormal basis in \(\mathbb{R}^N\).
-
-Properties:
-
-- preserves energy,
-- removes axis-specific artifacts,
-- ignores intrinsic geometry.
-
-Rotation answers the question:
-
-> “How do we avoid a bad coordinate system?”
+- \(J \in \mathbb{R}^{N \times d}\)는 접공간을 span하고,
+- \(\theta \in \mathbb{R}^d\)는 내재 좌표(intrinsic coordinates)이며,
+- \(\epsilon\)는 매니폴드에 직교하는 작은 잔차(residual)입니다.
 
 ---
 
-### 3.2 Alignment
+## 3. 정렬 vs 회전: 기하학적 대비
 
-Alignment seeks a basis adapted to \(\mathcal{M}\).
+### 3.1 회전(rotation)
 
-Properties:
+회전은 \(\mathbb{R}^N\)에서 임의의 직교정규(orthonormal) 기저를 선택합니다.
 
-- concentrates meaningful variation,
-- isolates sensitive directions,
-- enables structured representations.
+성질:
 
-Alignment answers the question:
+- 에너지를 보존하고,
+- 축-특정 인공물을 제거하며,
+- 내재 기하(intrinsic geometry)는 무시합니다.
 
-> “What coordinate system best represents the operator?”
+회전은 다음 질문에 답합니다.
+
+> “나쁜 좌표계를 어떻게 피할 것인가?”
 
 ---
 
-## 4. Alignment as Functional Representation
+### 3.2 정렬(alignment)
 
-In aligned coordinates, parameters admit a decomposition:
+정렬은 \(\mathcal{M}\)에 적응된 기저를 찾습니다.
+
+성질:
+
+- 의미 있는 변화를 집중시키고,
+- 민감한 방향을 분리하며,
+- 구조적 표현을 가능하게 합니다.
+
+정렬은 다음 질문에 답합니다.
+
+> “연산자를 가장 잘 표현하는 좌표계는 무엇인가?”
+
+---
+
+## 4. 함수적 표현으로서의 정렬
+
+정렬된 좌표계에서는 파라미터가 다음 분해를 갖습니다.
 \[
 W = f\_\theta(\alpha) + r
 \]
 
-where:
+여기서:
 
-- \(f\_\theta\): low-dimensional, structured function,
-- \(\alpha\): intrinsic coordinates (e.g., layer index, channel index),
-- \(r\): small residual noise.
+- \(f\_\theta\): 저차원 구조 함수(low-dimensional structured function)
+- \(\alpha\): 내재 좌표(예: 레이어 인덱스, 채널 인덱스)
+- \(r\): 작은 잔차 잡음(residual noise)
 
-This is analogous to:
+이는 다음과 유사합니다.
 
-- signal + noise decomposition,
-- principal + residual components,
-- model + error terms.
+- 신호 + 잡음 분해,
+- 주성분 + 잔차 성분,
+- 모델 + 오차 항.
 
-Crucially, **\(f\_\theta\) is compressible as a function**,
-while \(r\) is compressible via quantization and entropy coding.
-
----
-
-## 5. Why Alignment Enables Compression
-
-Compression effectiveness depends on two factors:
-
-1. **Concentration** of coefficients
-2. **Predictability** across coordinates
-
-Manifold alignment improves both:
-
-- coefficients concentrate along few axes,
-- remaining coefficients exhibit simple distributions.
-
-This leads to:
-
-- lower Shannon entropy,
-- better Huffman / arithmetic coding,
-- improved rate–distortion trade-offs.
+핵심은 **\(f\_\theta\)가 “함수”로서 압축 가능**하다는 점이며,
+\(r\)은 양자화 및 엔트로피 코딩(entropy coding)으로 압축하기 좋다는 점입니다.
 
 ---
 
-## 6. Practical Approximations to Alignment
+## 5. 왜 정렬이 압축을 가능하게 하는가
 
-Exact manifold alignment is infeasible for large models.
-However, practical approximations exist.
+압축의 효과는 다음 두 요인에 좌우됩니다.
 
-### 6.1 Local Linear Approximation (PCA-like)
+1. 계수의 **집중(concentration)**
+2. 좌표 간 **예측 가능성(predictability)**
 
-Within a block or channel group:
+매니폴드 정렬은 둘 다 개선합니다.
 
-- estimate covariance of parameters,
-- align axes with top eigenvectors.
+- 계수가 소수의 축에 집중되고,
+- 나머지 계수는 더 단순한 분포를 보입니다.
 
-This approximates the tangent space locally.
+그 결과:
+
+- 샤논 엔트로피(Shannon entropy) 감소,
+- 허프만/산술 코딩(Huffman/arithmetic coding) 효율 개선,
+- 레이트–왜곡(rate–distortion) 트레이드오프 개선.
 
 ---
 
-### 6.2 Blockwise or Channelwise Alignment
+## 6. 정렬에 대한 실용적 근사
 
-Instead of global alignment:
+대형 모델에서 정확한 매니폴드 정렬은 현실적으로 불가능합니다.
+하지만 실용적인 근사 방법들이 존재합니다.
+
+### 6.1 국소 선형 근사(PCA 유사)
+
+블록 또는 채널 그룹 내부에서:
+
+- 파라미터 공분산(covariance)을 추정하고,
+- 상위 고유벡터(top eigenvectors)에 축을 정렬합니다.
+
+이는 접공간을 국소적으로 근사합니다.
+
+---
+
+### 6.2 블록/채널 단위 정렬
+
+전역 정렬 대신:
 
 - align within attention heads,
 - align within FFN blocks,
 - align per-channel or per-group.
 
-This respects architectural structure.
+이는 아키텍처 구조를 존중합니다.
 
 ---
 
-### 6.3 Learned Axis Transforms
+### 6.3 학습된 축 변환(learned axis transforms)
 
-Axis transforms may be learned by optimizing:
+축 변환은 다음 최적화로 학습할 수도 있습니다.
 \[
 \min_T \; R(TW) + \lambda D(f(x; TW))
 \]
 
-where:
+여기서:
 
-- \(R\): rate proxy (entropy, sparsity),
-- \(D\): distortion (loss increase).
+- \(R\): 레이트(rate) 대리값(예: 엔트로피, 희소성)
+- \(D\): 왜곡(distortion)(예: 손실 증가)
 
-This directly targets RD optimality.
-
----
-
-## 7. Relationship to Existing Methods
-
-Under this framework:
-
-- **Rotation-based methods**:
-  - reduce coordinate artifacts,
-  - but ignore manifold geometry.
-- **Low-rank methods**:
-  - partially capture alignment,
-  - but are often value-centric.
-- **Proposed approach**:
-  - explicitly targets manifold-aligned coordinates
-  - unifies rotation, quantization, and entropy coding.
+이는 RD 최적성을 직접 겨냥합니다.
 
 ---
 
-## 8. Manifold Curvature and Residuals
+## 7. 기존 방법들과의 관계
 
-Curvature plays a key role:
+이 프레임에서는:
 
-- high curvature → projection-induced outliers,
-- low curvature → smooth functional variation.
-
-Alignment reduces curvature projections,
-pushing curvature effects into residual terms \(r\),
-which can be aggressively quantized or zeroed.
-
----
-
-## 9. Implications for LLM Quantization
-
-Manifold-aligned representations imply:
-
-- outliers vanish naturally,
-- dead-zones emerge meaningfully,
-- uniform low-bit quantization becomes viable.
-
-Quantization is no longer a heuristic,
-but a natural consequence of representation choice.
+- **회전 기반 방법**:
+  - 좌표계 인공물을 줄이지만,
+  - 매니폴드 기하(geometry)는 무시합니다.
+- **저랭크/구조적 방법**:
+  - 정렬(alignment)을 부분적으로 포착하지만,
+  - 종종 값(value) 중심입니다.
+- **제안 접근**:
+  - 매니폴드-정렬 좌표계를 명시적으로 겨냥하며,
+  - 회전/양자화/엔트로피 코딩을 통합합니다.
 
 ---
 
-## Takeaway
+## 8. 매니폴드 곡률(curvature)과 잔차(residual)
 
-> **Rotation stabilizes; alignment compresses.  
-> Alignment reveals the functional structure
-> that compression can exploit.**
+곡률(curvature)은 핵심 역할을 합니다.
 
-Manifold-aligned coordinate systems provide
-a principled foundation for next-generation
-LLM quantization and compression methods.
+- 고곡률 → 투영-유발 아웃라이어(projection-induced outliers)
+- 저곡률 → 매끄러운 함수적 변화(smooth functional variation)
+
+정렬은 곡률 투영(curvature projection)을 줄여 곡률의 영향을 잔차 \(r\)로 밀어 넣습니다.
+이 잔차는 공격적으로 양자화하거나 0으로 만들 수 있습니다.
+
+---
+
+## 9. LLM 양자화에 대한 함의
+
+매니폴드-정렬 표현은 다음을 함의합니다.
+
+- 아웃라이어가 자연스럽게 사라지고,
+- 데드존(dead-zone)이 의미 있게 나타나며,
+- 균일 저비트 양자화가 가능해집니다.
+
+양자화는 더 이상 휴리스틱이 아니라, 표현 선택의 자연스러운 결과가 됩니다.
+
+---
+
+## 핵심 요약
+
+> **회전은 안정화하고, 정렬은 압축한다.  
+> 정렬은 압축이 활용할 수 있는 함수적 구조를 드러낸다.**
+
+매니폴드-정렬 좌표계는 차세대 LLM 양자화 및 압축 방법을 위한
+원칙적인 기반을 제공합니다.
 
 ---

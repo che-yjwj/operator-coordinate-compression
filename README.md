@@ -1,75 +1,76 @@
 # operator-coordinate-compression
 
-A research repository on **LLM weight quantization and compression from an
-operator- and coordinate-system perspective**.
+**LLM 가중치 양자화 및 압축을 ‘연산자(operator)’와 ‘좌표계(coordinate system)’ 관점에서**
+재해석하는 연구 리포지토리입니다.
 
 ---
 
-## Motivation
+## 문제의식
 
-Recent studies show that large language models (LLMs) can be aggressively
-quantized to INT8 or even INT4 with minimal degradation in perplexity.
-This challenges the conventional view that large-magnitude weights (outliers)
-must be carefully preserved.
+최근 연구들은 대규모 언어 모델(LLM)이 INT8, 심지어 INT4까지도 공격적으로 양자화될 수 있으며
+퍼플렉시티(perplexity) 저하가 매우 작을 수 있음을 보여줍니다.
+이는 큰 크기의 가중치(아웃라이어, outlier)를 특별히 보호해야 한다는
+전통적 관점을 흔듭니다.
 
-This repository proposes a different interpretation:
+이 리포지토리는 다음과 같은 다른 해석을 제안합니다.
 
 > **LLM compression is not fundamentally about removing information,  
 > but about choosing the right coordinate system to represent operator parameters.**
+>
+> **LLM 압축은 본질적으로 정보를 “삭제”하는 문제가 아니라,  
+> 연산자 파라미터를 표현할 “올바른 좌표계”를 고르는 문제다.**
 
 ---
 
-## Core Ideas
+## 핵심 아이디어
 
-We argue that:
+본 리포지토리의 핵심 주장은 다음과 같습니다.
 
-1. **LLM weights parameterize nonlinear operators**, not independent scalar values.
-2. **Trained weights lie on low-dimensional nonlinear manifolds** embedded in
-   high-dimensional parameter space.
-3. Observed **outliers are coordinate-relative artifacts**, arising from
-   misalignment between chosen axes and the manifold’s tangent space.
-4. Rotation-based methods (e.g., Hadamard / QuaRot) should be interpreted as
-   **axis transformations**, not frequency-domain transforms.
-5. While rotations flatten distributions and remove outliers,
-   **true compression gains arise from manifold-aligned coordinate systems**
-   that induce coefficient concentration.
-6. Such alignment enables **functional + residual decompositions**,
-   asymmetric quantization, and rate–distortion optimal compression.
+1. **LLM 가중치는 독립 스칼라 값이 아니라 비선형 연산자를 매개변수화**한다.
+2. **학습된 가중치는 고차원 파라미터 공간 안의 저차원 비선형 매니폴드(다양체)** 근처에 놓인다.
+3. 관측되는 **아웃라이어는 좌표계-상대적 인공물(artifact)**이며, 선택된 축과 매니폴드 접공간(tangent space)의 불일치에서 발생한다.
+4. Hadamard / QuaRot 등 회전 기반 방법은 주파수 변환이 아니라 **축 변환(axis transformation)**으로 해석해야 한다.
+5. 회전은 분포를 평탄화(flattening)하고 아웃라이어를 줄이지만, **진짜 압축 이득은 매니폴드-정렬(manifold-aligned) 좌표계**가 만드는 계수 집중(concentration)에서 나온다.
+6. 이러한 정렬은 **함수적(구조적) 성분 + 잔차(residual) 분해**, 비대칭 양자화, 레이트–왜곡(rate–distortion) 최적 압축으로 이어진다.
 
 ---
 
-## What This Repository Contains
+## 포함 내용
 
 - 📐 **Theory**
-  - Operator-centric view of LLM weights
-  - Manifold hypothesis and coordinate-relative outliers
-  - Axis transformation vs. frequency transformation
+  - LLM 가중치의 연산자 중심 관점
+  - 매니폴드 가설과 좌표계-상대적 아웃라이어
+  - 축 변환(axis) vs 주파수 변환(frequency)
 - 🧪 **Experiments**
-  - Toy experiments (Fourier basis vs. MLP basis)
-  - Axis transform analysis (Hadamard, PCA alignment)
-  - Validation on TinyLLaMA / SLM models
+  - 토이 실험 스펙 (Fourier basis vs. MLP basis)
+  - (planned) 축 변환 분석 (Hadamard, PCA 기반 정렬)
+  - TinyLLaMA / SLM 검증 스펙 (draft)
 - 🧾 **Writing**
-  - Academic paper drafts
-  - Patent-oriented invention summaries and claim candidates
+  - 학술 논문 초안
+  - 특허 지향 문서(발명 요약, 선행기술 매핑, 청구항 후보)
 
 ---
 
-## Repository Structure
+## 리포지토리 구조
 
 ```text
 operator-coordinate-compression/
 ├─ docs/
+│  ├─ index.md
 │  ├─ overview.md
 │  ├─ theory/
 │  ├─ paper/
 │  └─ patent/
 ├─ experiments/
 │  ├─ toy_basis_vs_mlp/
-│  ├─ axis_transform_analysis/
+│  │  └─ spec.md
 │  └─ tinyllama_validation/
-├─ src/
-│  ├─ transforms/
-│  ├─ quantization/
-│  ├─ entropy/
-│  └─ metrics/
+│     └─ spec.md
+├─ README.md
 └─ roadmap.md
+```
+
+향후 추가 예정(현재 없음):
+
+- `experiments/axis_transform_analysis/`
+- `src/`

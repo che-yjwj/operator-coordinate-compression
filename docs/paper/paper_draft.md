@@ -158,7 +158,7 @@ While random rotations achieve regime (2), optimal compression requires regime
 Aligned coordinates enable a decomposition:
 
 \[
-w*i \approx f*\theta(i) + r_i
+W_i \approx f_\theta(i) + r_i
 \]
 
 where \(f\_\theta\) captures structured, low-dimensional variation and \(r_i\)

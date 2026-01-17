@@ -1,212 +1,202 @@
-# Rotation vs. Alignment
+# 회전(Rotation) vs 정렬(Alignment)
 
-## Why Flattening Is Not Enough
-
----
-
-## 1. Why Rotation-Based Methods Appear Powerful
-
-Recent LLM quantization methods (e.g., QuaRot, SpinQuant, KurTail)
-demonstrate a striking phenomenon:
-
-- applying an orthogonal rotation to weight matrices,
-- followed by uniform low-bit quantization,
-- yields minimal degradation in perplexity.
-
-Empirically, such rotations:
-
-- suppress extreme outliers,
-- reduce kurtosis,
-- stabilize scale selection.
-
-At first glance, this suggests that rotation itself is the key to
-successful compression.
-
-However, this interpretation is incomplete.
+## 왜 평탄화(flattening)만으로는 충분하지 않은가
 
 ---
 
-## 2. Rotation Is Not Frequency Decomposition
+## 1. 회전 기반 방법이 강력해 보이는 이유
 
-It is tempting to interpret Hadamard or orthogonal transforms
-as frequency-domain operations, analogous to DCT or FFT.
-This interpretation is misleading.
+최근 LLM 양자화 방법(예: QuaRot, SpinQuant, KurTail)은 다음과 같은 인상적인 현상을 보여줍니다.
 
-Key distinctions:
+- 가중치 행렬에 직교 회전(orthogonal rotation)을 적용한 뒤,
+- 균일(uniform) 저비트 양자화를 수행해도,
+- 퍼플렉시티(perplexity) 저하가 매우 작을 수 있습니다.
 
-| Aspect                | Frequency Transform | Axis Rotation             |
-| --------------------- | ------------------- | ------------------------- |
-| Semantic meaning      | Physical frequency  | None                      |
-| Basis                 | Ordered, structured | Arbitrary orthogonal      |
-| Energy preservation   | Yes                 | Yes                       |
-| Localization          | Frequency-specific  | Coordinate redistribution |
-| Compression mechanism | Energy compaction   | Distribution flattening   |
+경험적으로 이런 회전은:
 
-Hadamard transforms used in LLM quantization
-**do not correspond to semantic frequencies**.
-They are better understood as **random or structured rotations**.
+- 극단적 아웃라이어를 억제하고,
+- 첨도(kurtosis)를 낮추며,
+- 스케일 선택을 안정화합니다.
+
+겉보기에는 회전 자체가 성공적인 압축의 핵심처럼 보일 수 있습니다.
+하지만 이 해석은 불완전합니다.
 
 ---
 
-## 3. What Rotation Actually Does
+## 2. 회전은 주파수 분해가 아니다
 
-Let \( W \in \mathbb{R}^N \) be a parameter vector.
-An orthogonal rotation \(T\) produces:
+Hadamard 또는 직교 변환을 DCT/FFT처럼 주파수 영역 연산으로 해석하고 싶어지지만,
+이 해석은 오해를 낳습니다.
+
+핵심 차이는 다음과 같습니다.
+
+| 구분 | 주파수 변환(Frequency Transform) | 축 회전(Axis Rotation) |
+| --- | --- | --- |
+| 의미(semantic) | 물리적 주파수 | 없음 |
+| 기저(basis) | 정렬된/구조적 | 임의의 직교 기저 |
+| 에너지 보존 | 예 | 예 |
+| 국소화(localization) | 주파수-특정 | 좌표 재분배 |
+| 압축 메커니즘 | 에너지 응집(compaction) | 분포 평탄화(flattening) |
+
+LLM 양자화에서 쓰이는 Hadamard 변환은 **의미론적 주파수**에 대응하지 않습니다.
+이는 **랜덤(또는 구조적) 회전**으로 이해하는 편이 더 적절합니다.
+
+---
+
+## 3. 회전이 실제로 하는 일
+
+파라미터 벡터 \( W \in \mathbb{R}^N \)를 생각하면, 직교 회전 \(T\)는 다음을 만듭니다.
 
 \[
 W' = T W
 \]
 
-This operation:
+이 연산은:
 
-- preserves L2 energy,
-- preserves exact operator behavior,
-- redistributes energy across coordinates.
+- L2 에너지를 보존하고,
+- 연산자의 기능적 동작을 정확히 보존하며,
+- 에너지를 좌표들 사이에 재분배합니다.
 
-Statistically, random or pseudo-random rotations tend to:
+통계적으로 랜덤(또는 준-랜덤) 회전은 대체로:
 
-- reduce peak magnitudes,
-- make distributions more Gaussian-like,
-- lower kurtosis.
+- 피크 크기를 줄이고,
+- 분포를 더 가우시안(Gaussian)에 가깝게 만들며,
+- 첨도(kurtosis)를 낮춥니다.
 
-This effect is best described as **flattening**.
-
----
-
-## 4. Flattening vs. Alignment
-
-Flattening should not be confused with alignment.
-
-### 4.1 Flattening (What Rotation Achieves)
-
-Flattening properties:
-
-- energy spread across many coordinates,
-- reduced extreme values,
-- improved numerical stability.
-
-However:
-
-- information is still distributed,
-- effective dimensionality remains high,
-- entropy reduction is limited.
-
-Flattening improves robustness but not optimality.
+이 효과는 **평탄화(flattening)**라고 부르는 것이 가장 정확합니다.
 
 ---
 
-### 4.2 Alignment (What Compression Needs)
+## 4. 평탄화(flattening) vs 정렬(alignment)
 
-Alignment refers to choosing coordinates that:
+평탄화는 정렬(alignment)과 혼동하면 안 됩니다.
 
-- coincide with meaningful directions of variation,
-- isolate sensitive degrees of freedom,
-- concentrate energy into a noticebly smaller subset of coordinates.
+### 4.1 평탄화(회전이 달성하는 것)
 
-Aligned coordinates exhibit:
+평탄화의 성질:
 
-- low effective rank,
-- high top-k energy ratios,
-- strong entropy reduction.
+- 에너지가 많은 좌표로 퍼지고,
+- 극단값이 줄며,
+- 수치적 안정성(numerical stability)이 좋아집니다.
 
-Alignment enables **true compression**, not just stable quantization.
+하지만:
 
----
+- 정보가 여전히 분산되어 있고,
+- 유효 차원(effective dimensionality)이 높게 남으며,
+- 엔트로피 감소가 제한적입니다.
 
-## 5. Manifold Perspective on Rotation and Alignment
-
-Assume weights lie near a low-dimensional manifold \(\mathcal{M}\).
-
-- Rotation: chooses a random basis in ambient space
-- Alignment: chooses a basis adapted to the tangent space of \(\mathcal{M}\)
-
-From this perspective:
-
-- rotation reduces projection artifacts,
-- alignment reveals intrinsic structure.
-
-Rotation makes the representation _less bad_;
-alignment makes it _good_.
+평탄화는 강인성을 높이지만, 최적성(optimality)을 보장하지는 않습니다.
 
 ---
 
-## 6. Why Rotation Works Surprisingly Well
+### 4.2 정렬(압축이 필요로 하는 것)
 
-Rotation-based methods succeed because:
+정렬(alignment)은 다음을 만족하는 좌표계를 선택하는 것을 뜻합니다.
 
-- LLMs are robust to noise,
-- parameter sensitivity is anisotropic,
-- random rotations avoid worst-case axis choices.
+- 의미 있는 변화(variation) 방향과 일치하고,
+- 민감한 자유도(degrees of freedom)를 분리하며,
+- 에너지를 더 작은 좌표 부분집합으로 눈에 띄게 집중시키는 것.
 
-Thus, flattening alone is often sufficient
-to enable aggressive quantization (e.g., INT4).
+정렬된 좌표계는 보통:
 
-However, this success should not be misinterpreted as optimality.
+- 낮은 유효 랭크(effective rank),
+- 높은 top-k 에너지 비율,
+- 큰 엔트로피 감소를 보입니다.
 
----
-
-## 7. Limits of Rotation-Based Compression
-
-Rotation has inherent limitations:
-
-1. **No structural concentration**
-   - coefficients remain dense.
-2. **Entropy floor**
-   - distributions approach Gaussian,
-     which is poorly compressible.
-3. **No functional interpretability**
-   - rotated coordinates lack semantic meaning.
-
-These limitations explain why:
-
-- rotation improves quantization robustness,
-- but does not dramatically improve entropy coding efficiency.
+정렬은 안정적인 양자화가 아니라 **진짜 압축(true compression)**을 가능하게 합니다.
 
 ---
 
-## 8. Alignment as the Next Step
+## 5. 매니폴드 관점에서 본 회전과 정렬
 
-Manifold-aligned coordinates aim to:
+가중치가 저차원 매니폴드 \(\mathcal{M}\) 근처에 놓인다고 가정합시다.
 
-- separate meaningful variation from redundancy,
-- enable functional + residual decomposition,
-- minimize rate for a given distortion.
+- 회전(rotation): 주변 공간(ambient space)에서 임의의 직교 기저를 선택
+- 정렬(alignment): \(\mathcal{M}\)의 접공간(tangent space)에 적응된 기저를 선택
 
-This may be approximated by:
+이 관점에서:
 
-- PCA-like local tangent estimation,
-- block-wise low-rank projections,
-- learned axis transforms optimized for entropy or RD cost.
+- 회전은 투영 인공물(projection artifacts)을 줄이고,
+- 정렬은 내재 구조(intrinsic structure)를 드러냅니다.
 
-Rotation is therefore best viewed as:
-
-> **a baseline normalization step, not the end goal.**
+회전은 표현을 _덜 나쁘게_ 만들고, 정렬은 표현을 _좋게_ 만듭니다.
 
 ---
 
-## 9. Positioning of Existing Methods
+## 6. 회전이 예상외로 잘 동작하는 이유
 
-Under this framework:
+회전 기반 방법이 성공하는 이유는 다음과 같습니다.
+
+- LLM이 잡음에 강인하고,
+- 파라미터 민감도(sensitivity)가 비등방적(anisotropic)이며,
+- 랜덤 회전이 최악의 축 선택을 피하기 때문입니다.
+
+따라서 평탄화만으로도 공격적인 양자화(예: INT4)가 가능한 경우가 많습니다.
+하지만 이를 “최적”이라고 오해하면 안 됩니다.
+
+---
+
+## 7. 회전 기반 압축의 한계
+
+회전에는 구조적인 한계가 있습니다.
+
+1. **구조적 집중(concentration) 부재**
+   - 계수(coefficient)가 여전히 조밀(dense)합니다.
+2. **엔트로피 바닥(entropy floor)**
+   - 분포가 가우시안(Gaussian)에 가까워지며,
+     이는 압축에 불리합니다.
+3. **기능적 해석성 부재**
+   - 회전된 좌표는 의미론적(semantic) 의미가 없습니다.
+
+이 한계는 다음을 설명합니다.
+
+- 회전이 양자화의 강인성은 높이지만,
+- 엔트로피 코딩(entropy coding) 효율을 극적으로 개선하지는 못한다는 점.
+
+---
+
+## 8. 다음 단계로서의 정렬(alignment)
+
+매니폴드-정렬 좌표계는 다음을 목표로 합니다.
+
+- 의미 있는 변화(variation)와 중복성(redundancy)을 분리하고,
+- 함수 성분 + 잔차(residual) 분해를 가능하게 하며,
+- 주어진 왜곡(distortion)에서 레이트(rate)를 최소화합니다.
+
+이는 다음으로 근사될 수 있습니다.
+
+- PCA 유사 국소 접공간(tangent space) 추정,
+- 블록 단위 저랭크(low-rank) 투영,
+- 엔트로피 또는 RD 비용(cost)을 최적화한 학습된 축 변환.
+
+따라서 회전은 다음처럼 보는 것이 가장 적절합니다.
+
+> **최종 목표가 아니라, 베이스라인 정규화(normalization) 단계.**
+
+---
+
+## 9. 기존 방법들의 포지셔닝
+
+이 프레임에서는:
 
 - QuaRot / SpinQuant:
-  - rotation-based flattening methods.
+  - 회전 기반 평탄화 방법.
 - SmoothQuant / GPTQ:
-  - value-centric heuristics.
-- Proposed approach:
-  - **manifold-aware axis alignment**.
+  - 값(value) 중심 휴리스틱.
+- 제안 접근:
+  - **매니폴드-인식(manifold-aware) 축 정렬(axis alignment)**.
 
-This positioning clarifies both the strengths
-and limitations of existing techniques.
+이 포지셔닝은 기존 기법의 강점과 한계를 동시에 명확히 해줍니다.
 
 ---
 
-## Takeaway
+## 핵심 요약
 
-> **Rotation removes coordinate pathologies;  
-> alignment reveals structure.**
+> **회전은 좌표계 병리(pathology)를 줄이고,  
+> 정렬은 구조를 드러낸다.**
 
-True compression of LLM operators requires moving
-from flattening-based preprocessing
-to manifold-aligned representations.
+LLM 연산자의 “진짜 압축”을 위해서는
+평탄화 기반 전처리에서 더 나아가
+매니폴드-정렬 표현으로 이동해야 합니다.
 
 ---

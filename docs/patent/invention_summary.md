@@ -1,185 +1,163 @@
-# Invention Summary
+# 발명 요약(Invention Summary)
 
-## Operator-Coordinate-Based Compression of Neural Network Parameters
-
----
-
-## 1. Technical Field
-
-The present invention relates to methods and systems for
-compressing parameters of neural networks, particularly
-large language models (LLMs), for efficient storage and inference
-on hardware-constrained platforms.
-
-More specifically, the invention concerns
-**coordinate-system transformations and operator-aware representations**
-for quantization and entropy coding of neural network parameters.
+## 신경망 파라미터의 연산자-좌표계 기반 압축(Operator-Coordinate-Based Compression)
 
 ---
 
-## 2. Background and Problem Statement
+## 1. 기술 분야(Technical Field)
 
-Modern LLMs contain billions of parameters and require
-substantial memory bandwidth and storage.
-To address this, various quantization and compression techniques
-have been proposed.
+본 발명은 신경망, 특히 대규모 언어 모델(LLM)의 파라미터를
+하드웨어 제약 환경에서 효율적으로 저장/추론하기 위해
+압축(compression)하는 방법 및 시스템에 관한 것입니다.
 
-Conventional approaches typically:
-
-- treat weights as independent scalar values,
-- identify large-magnitude values (outliers) as important,
-- rely on clipping, mixed precision, or heuristic outlier handling.
-
-Recent methods introduce orthogonal rotations (e.g., Hadamard)
-to reduce outliers prior to quantization.
-However, these methods lack a principled explanation of
-why rotation works and do not fully exploit the structure
-of trained models for compression.
-
-There exists a need for a method that:
-
-- explains outlier behavior fundamentally,
-- enables aggressive low-bit quantization,
-- improves entropy coding efficiency,
-- and is grounded in the geometry of operator parameters.
+더 구체적으로 본 발명은 신경망 파라미터의 양자화(quantization) 및 엔트로피 코딩(entropy coding)을 위해
+**좌표계 변환(coordinate-system transformation)** 및 **연산자-인식(operator-aware) 표현**을 사용하는 것에 관한 것입니다.
 
 ---
 
-## 3. Core Insight of the Invention
+## 2. 배경 및 문제점(Background and Problem Statement)
 
-The core insight of the invention is that:
+현대의 LLM은 수십억 개의 파라미터를 포함하며
+큰 메모리 대역폭과 저장공간을 요구합니다.
+이를 해결하기 위해 다양한 양자화 및 압축 기법이 제안되어 왔습니다.
 
-> **Neural network weights are parameters of nonlinear operators,
-> and observed outliers are artifacts of misaligned coordinate systems,
-> rather than intrinsic carriers of information.**
+기존 접근은 보통 다음과 같습니다.
 
-Accordingly:
+- 가중치를 서로 독립적인 스칼라 값으로 취급하고,
+- 큰 크기의 값(아웃라이어, outlier)을 중요하다고 간주하며,
+- 클리핑(clipping), 혼합 정밀도(mixed precision), 휴리스틱 아웃라이어 처리에 의존합니다.
 
-- multiple parameterizations of the same operator are functionally equivalent,
-- but differ significantly in compressibility.
+최근에는 양자화 전에 직교 회전(예: Hadamard)을 적용해 아웃라이어를 줄이는 방법들이 제안되었습니다.
+하지만 이러한 방법들은 회전이 왜 동작하는지에 대한 원칙적(principled) 설명이 부족하고,
+학습된 모델의 구조를 압축 관점에서 충분히 활용하지 못합니다.
 
-The invention reframes compression as a problem of
-**selecting coordinate systems aligned with the intrinsic structure
-(manifold) of the operator parameter space**.
+따라서 다음을 만족하는 방법이 필요합니다.
 
----
-
-## 4. Summary of the Invention
-
-The invention provides a method comprising:
-
-1. Interpreting neural network parameters as operator coefficients
-   rather than independent data values.
-2. Applying one or more coordinate transformations to reparameterize
-   the operator without changing its functional behavior.
-3. Distinguishing between:
-   - rotation-based flattening transformations, and
-   - structure-aligned (manifold-aligned) coordinate systems.
-4. Representing parameters as:
-   - a structured functional component, and
-   - a residual component suitable for low-bit quantization.
-5. Compressing the reparameterized parameters using
-   uniform or non-uniform quantization and entropy coding.
-
-This approach enables improved rate–distortion trade-offs
-compared to conventional value-centric methods.
+- 아웃라이어 거동을 근본적으로 설명하고,
+- 공격적인 저비트 양자화를 가능하게 하며,
+- 엔트로피 코딩 효율을 개선하고,
+- 연산자 파라미터의 기하학(geometry)에 기반한 방법.
 
 ---
 
-## 5. Key Novel Elements
+## 3. 발명의 핵심 통찰(Core Insight)
 
-The invention introduces the following novel aspects:
+본 발명의 핵심 통찰은 다음과 같습니다.
 
-### (a) Coordinate-Relative Interpretation of Outliers
+> **신경망 가중치는 비선형 연산자의 파라미터이며,
+> 관측되는 아웃라이어는 정보의 본질적 운반자가 아니라
+> 정렬되지 않은 좌표계가 만들어내는 인공물(artifact)이다.**
 
-Outliers are identified as coordinate-dependent projection artifacts
-rather than semantically important values.
+따라서:
 
-### (b) Operator-Centric Compression Framework
+- 동일한 연산자에 대한 여러 파라미터화는 기능적으로 동등할 수 있으나,
+- 압축 가능성(compressibility)은 크게 달라질 수 있습니다.
 
-Weights are treated as operator parameters,
-and compression is formulated as reparameterization.
-
-### (c) Distinction Between Flattening and Alignment
-
-Orthogonal rotations are recognized as flattening operations,
-while manifold-aligned transformations enable coefficient concentration.
-
-### (d) Functional + Residual Decomposition
-
-Parameters are decomposed into structured functional components
-and quantizable residuals.
-
-### (e) Geometry-Aware Rate–Distortion Optimization
-
-Coordinate transforms are selected to minimize coding rate
-for a target operator distortion.
+본 발명은 압축을 **연산자 파라미터 공간의 내재 구조(매니폴드, manifold)에 정렬되는 좌표계를 선택하는 문제**로 재정의합니다.
 
 ---
 
-## 6. Exemplary Embodiments
+## 4. 발명의 요약(Summary)
 
-### Embodiment 1: Blockwise Axis Alignment
+본 발명은 다음 단계를 포함하는 방법을 제공합니다.
 
-- Partition weight tensors into blocks or channels.
-- Estimate local parameter covariance.
-- Align coordinate axes with dominant variation directions.
-- Quantize aligned coefficients uniformly.
+1. 신경망 파라미터를 독립 데이터 값이 아니라 연산자 계수(operator coefficients)로 해석합니다.
+2. 연산자의 기능적 동작을 바꾸지 않으면서(예: 가역/직교 변환) 하나 이상의 좌표 변환을 적용하여 재매개변수화합니다.
+3. 다음을 구분합니다.
+   - 회전 기반 평탄화 변환(flattening)
+   - 구조-정렬(매니폴드-정렬) 좌표계(alignment)
+4. 파라미터를 다음처럼 표현합니다.
+   - 구조적 함수 성분(structured functional component)
+   - 저비트 양자화에 적합한 잔차 성분(residual component)
+5. 재매개변수화된 파라미터를 균일/비균일 양자화 및 엔트로피 코딩으로 압축합니다.
 
-### Embodiment 2: Rotation + Alignment Pipeline
-
-- Apply an orthogonal rotation to remove coordinate artifacts.
-- Apply a secondary alignment transform to concentrate coefficients.
-- Perform low-bit quantization and entropy coding.
-
-### Embodiment 3: Learned Axis Transform
-
-- Optimize a parameterized transform jointly with
-  a rate–distortion objective.
-- Store the transform metadata alongside compressed parameters.
+이 접근은 기존 값 중심 방법 대비 더 나은 레이트–왜곡(rate–distortion) 트레이드오프를 가능하게 합니다.
 
 ---
 
-## 7. Advantages Over Prior Art
+## 5. 핵심 신규 요소(Key Novel Elements)
 
-Compared to existing techniques, the invention:
+본 발명은 다음과 같은 신규 요소를 도입합니다.
 
-- eliminates the need for explicit outlier protection,
-- supports uniform low-bit quantization across layers,
-- improves entropy coding efficiency,
-- provides a principled geometric interpretation,
-- and generalizes across architectures and model sizes.
+### (a) 아웃라이어의 좌표계-상대적 해석
 
----
+아웃라이어를 의미론적으로 중요한 값이 아니라 좌표계-의존 투영 인공물(projection artifact)로 해석합니다.
 
-## 8. Industrial Applicability
+### (b) 연산자 중심 압축 프레임워크
 
-The invention is applicable to:
+가중치를 연산자 파라미터로 취급하고, 압축을 재매개변수화 문제로 정식화합니다.
 
-- on-device LLM inference,
-- NPUs and AI accelerators,
-- memory-constrained embedded systems,
-- model distribution and deployment pipelines.
+### (c) 평탄화(flattening)와 정렬(alignment)의 구분
 
----
+직교 회전은 평탄화 연산으로 보고, 매니폴드-정렬 변환이 계수 집중(concentration)을 가능하게 함을 명시합니다.
 
-## 9. Conceptual Claim Direction (Non-Limiting)
+### (d) 함수 성분 + 잔차(residual) 분해
 
-- A method for compressing neural network parameters
-  using coordinate transformations aligned with operator structure.
-- A system for representing neural network weights
-  as functional components plus residuals.
-- A computer-readable medium storing instructions
-  for performing the above methods.
+파라미터를 구조적 함수 성분과 양자화 가능한 잔차로 분해합니다.
+
+### (e) 기하-인식 레이트–왜곡 최적화(Geometry-Aware RD Optimization)
+
+목표 연산자 왜곡(distortion)에 대해 부호화 레이트(coding rate)를 최소화하도록 좌표 변환을 선택합니다.
 
 ---
 
-## 10. Summary Statement
+## 6. 실시예(Exemplary Embodiments)
 
-> **By recognizing neural network weights as operator parameters
-> and outliers as coordinate artifacts,
-> the invention enables a fundamentally new class
-> of compression techniques based on geometric alignment
-> rather than heuristic value handling.**
+### 실시예 1: 블록 단위 축 정렬(Blockwise Axis Alignment)
+
+- 가중치 텐서를 블록 또는 채널로 분할합니다.
+- 국소 파라미터 공분산(covariance)을 추정합니다.
+- 주요 변동 방향(dominant variation directions)에 좌표축을 정렬합니다.
+- 정렬된 계수를 균일 양자화합니다.
+
+### 실시예 2: 회전 + 정렬 파이프라인(Rotation + Alignment Pipeline)
+
+- 좌표계 인공물을 제거하기 위해 직교 회전을 적용합니다.
+- 계수를 집중시키기 위해 2차 정렬 변환을 적용합니다.
+- 저비트 양자화 및 엔트로피 코딩을 수행합니다.
+
+### 실시예 3: 학습된 축 변환(Learned Axis Transform)
+
+- 파라미터화된 변환을 레이트–왜곡 목적함수(rate–distortion objective)와 함께 공동 최적화합니다.
+- 압축된 파라미터와 함께 변환 메타데이터를 저장합니다.
+
+---
+
+## 7. 선행기술 대비 장점(Advantages)
+
+기존 기법과 비교할 때, 본 발명은:
+
+- 명시적인 아웃라이어 보호가 필요 없고,
+- 레이어 전반에서 균일 저비트 양자화를 지원하며,
+- 엔트로피 코딩 효율을 개선하고,
+- 원칙적인 기하학적 해석을 제공하며,
+- 아키텍처와 모델 크기 전반에 일반화됩니다.
+
+---
+
+## 8. 산업상 이용 가능성(Industrial Applicability)
+
+본 발명은 다음에 적용 가능합니다.
+
+- 온디바이스 LLM 추론,
+- NPU 및 AI 가속기,
+- 메모리 제약 임베디드 시스템,
+- 모델 배포 및 디플로이 파이프라인.
+
+---
+
+## 9. 개념적 청구항 방향(예시, 비한정)
+
+- 연산자 구조에 정렬되는 좌표 변환을 사용해 신경망 파라미터를 압축하는 방법.
+- 신경망 가중치를 함수 성분 + 잔차 성분으로 표현하는 시스템.
+- 상기 방법을 수행하기 위한 명령을 저장한 컴퓨터 판독 가능 매체.
+
+---
+
+## 10. 요약 문장(Summary Statement)
+
+> **신경망 가중치를 연산자 파라미터로, 아웃라이어를 좌표계 인공물로 인식함으로써,
+> 본 발명은 휴리스틱 값 처리 대신 기하학적 정렬에 기반한
+> 근본적으로 새로운 압축 기법의 범주를 가능하게 한다.**
 
 ---

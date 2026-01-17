@@ -1,192 +1,178 @@
-# Operator-Centric View of LLM Weights
+# LLM 가중치의 연산자(operator) 중심 관점
 
 ---
 
-## 1. Why “Weight-as-Data” is a Misleading Abstraction
+## 1. “가중치=데이터”라는 추상화가 왜 오해를 낳는가
 
-Most discussions of LLM quantization implicitly treat weights as data:
-a collection of scalar values whose magnitudes are assumed to correlate
-with importance or information content.
+LLM 양자화에 대한 많은 논의는 암묵적으로 가중치를 “데이터”로 취급합니다.
+즉, 크기(magnitude)가 중요도나 정보량과 상관된다고 가정되는 스칼라 값들의 집합으로 보는 것입니다.
 
-Under this abstraction:
+이 추상화 아래에서는:
 
-- large-magnitude weights are viewed as “important,”
-- small-magnitude weights are considered expendable or noise-like,
-- quantization is framed as value approximation or truncation.
+- 큰 크기의 가중치는 “중요하다”고 보고,
+- 작은 크기의 가중치는 버려도 되거나 잡음처럼 취급하며,
+- 양자화는 값의 근사/절단(truncation) 문제로 프레이밍됩니다.
 
-However, this view leads to conceptual contradictions:
+하지만 이 관점은 다음과 같은 개념적 모순을 낳습니다.
 
-- orthogonal rotations can dramatically alter weight magnitudes
-  without changing model behavior,
-- aggressive low-bit quantization often preserves perplexity,
-- different coordinate systems yield vastly different outlier statistics.
+- 직교 회전이 모델 동작을 바꾸지 않으면서도 가중치 크기를 크게 바꿀 수 있고,
+- 공격적인 저비트 양자화가 종종 퍼플렉시티(perplexity)를 유지하며,
+- 좌표계에 따라 아웃라이어 통계가 극적으로 달라진다는 점.
 
-These observations suggest that **weights are not data** in the usual sense.
+이 관측들은 통상적 의미에서 **가중치는 데이터가 아니다**라는 점을 시사합니다.
 
 ---
 
-## 2. Weights as Operator Parameters
+## 2. 가중치는 연산자 파라미터다
 
-An LLM implements a nonlinear operator:
+LLM은 다음 형태의 비선형 연산자를 구현합니다.
 
 \[
 y = f(x; W)
 \]
 
-where \(W\) denotes the collection of weight tensors.
-From a functional perspective:
+여기서 \(W\)는 가중치 텐서들의 모음을 의미합니다.
+함수적(functional) 관점에서 보면:
 
-- \(x\): input signal
-- \(f(\cdot; W)\): learned operator
-- \(W\): _parameters_ defining the operator, not samples drawn from a distribution
+- \(x\): 입력 신호
+- \(f(\cdot; W)\): 학습된 연산자
+- \(W\): 분포에서 뽑힌 샘플이 아니라, 연산자를 정의하는 _파라미터_
 
-In classical signal processing terms,
-weights correspond more closely to **filter coefficients**
-than to signals themselves.
+고전 신호처리 관점에서 가중치는 신호 자체라기보다 **필터 계수(filter coefficients)**에 더 가깝습니다.
 
-This distinction is crucial:
+이 구분은 매우 중요합니다.
 
-- signals are objects to be compressed,
-- operators define transformations and admit multiple equivalent parameterizations.
+- 신호(signal)는 압축 대상이고,
+- 연산자(operator)는 변환을 정의하며, 동등한 여러 파라미터화(parameterization)를 가질 수 있습니다.
 
 ---
 
-## 3. Reparameterization Invariance
+## 3. 재매개변수화 불변성(reparameterization invariance)
 
-A fundamental property of operators is **reparameterization invariance**.
+연산자의 중요한 성질 중 하나는 **재매개변수화 불변성**입니다.
 
-Let \(T\) be an invertible transformation on the parameter space.
-Then the operator can be equivalently represented as:
+파라미터 공간에서 가역(invertible) 변환 \(T\)를 생각해 봅시다.
+그러면 연산자는 다음과 같이 동등하게 표현될 수 있습니다.
 
 \[
 f(x; W) \equiv f(x; T^{-1} (T W))
 \]
 
-If \(T\) is orthogonal, this reparameterization preserves:
+만약 \(T\)가 직교(orthogonal)라면, 이 재매개변수화는 다음을 보존합니다.
 
-- L2 norm of parameters,
-- exact functional behavior.
+- 파라미터의 L2 노름,
+- 연산자의 정확한 기능적 동작.
 
-Yet it may drastically change:
+하지만 다음은 크게 바뀔 수 있습니다.
 
-- per-coordinate magnitudes,
-- kurtosis and tail behavior,
-- quantization error under fixed-bit representations.
+- 좌표별 크기,
+- 첨도(kurtosis) 및 꼬리(tail) 거동,
+- 고정 비트 표현에서의 양자화 오차.
 
-This implies that **many weight representations are functionally equivalent
-but compression-inequivalent**.
-
----
-
-## 4. Implications for Quantization
-
-Quantization approximates parameters in a _chosen coordinate system_.
-Therefore, its effectiveness depends on how well that coordinate system
-matches the structure of the operator.
-
-From the operator-centric view:
-
-- quantization error is not inherently “information loss,”
-- it is a perturbation of the operator’s parameterization.
-
-The relevant question is not:
-
-> “How accurately are individual weights preserved?”
-
-but rather:
-
-> “How sensitive is the operator \(f(\cdot; W)\) to perturbations
-> in a given coordinate system?”
+이는 **여러 가중치 표현이 기능적으로는 동등하지만, 압축 관점에서는 동등하지 않을 수 있다**는 뜻입니다.
 
 ---
 
-## 5. Coordinate Dependence of Sensitivity
+## 4. 양자화에 대한 함의
 
-Different coordinates correspond to different directions in parameter space.
-Perturbations along these directions have unequal impact on the operator.
+양자화는 _선택된 좌표계_에서 파라미터를 근사합니다.
+따라서 양자화의 효과는 해당 좌표계가 연산자의 구조와 얼마나 잘 맞는지에 달려 있습니다.
 
-If the coordinate axes are:
+연산자 중심 관점에서 보면:
 
-- **aligned with high-sensitivity directions**,
-  small quantization error can cause large functional distortion.
-- **aligned with low-sensitivity directions**,
-  large parameter error may have negligible effect.
+- 양자화 오차는 본질적으로 “정보 손실”이 아니라,
+- 연산자 파라미터화에 가해지는 섭동(perturbation)입니다.
 
-Thus, optimal compression seeks coordinate systems in which:
+따라서 중요한 질문은 다음이 아니라,
 
-- sensitivity is concentrated in a small number of directions,
-- remaining directions are robust to coarse approximation.
+> “개별 가중치를 얼마나 정확히 보존했는가?”
 
----
+오히려 다음입니다.
 
-## 6. Connection to Low-Dimensional Structure
-
-Empirical evidence suggests that trained LLMs exhibit:
-
-- redundancy,
-- flat minima,
-- robustness to noise.
-
-These properties are consistent with the hypothesis that
-operator parameters lie near a **low-dimensional manifold** in parameter space.
-
-In such cases:
-
-- meaningful variations are confined to a few directions,
-- many coordinates represent redundant or weakly sensitive dimensions.
-
-This observation motivates the search for coordinate systems
-that explicitly expose this low-dimensional structure.
+> “선택한 좌표계에서의 섭동(perturbation)에 대해
+> 연산자 \(f(\cdot; W)\)는 얼마나 민감한가?”
 
 ---
 
-## 7. Why Outliers Are Not “Important Weights”
+## 5. 민감도의 좌표계 의존성
 
-Under the operator-centric view,
-large-magnitude coordinates do not necessarily correspond to
-high-sensitivity directions.
+서로 다른 좌표계는 파라미터 공간에서 서로 다른 방향(direction)에 해당합니다.
+이 방향들로의 섭동은 연산자에 서로 다른 영향을 줍니다.
 
-Outliers can arise when:
+좌표축이 다음과 같다면:
 
-- the chosen coordinate axes are poorly aligned with the operator manifold,
-- curvature projects strongly onto a small number of axes.
+- **고민감(high-sensitivity) 방향에 정렬**되어 있다면,
+  작은 양자화 오차도 큰 기능적 왜곡을 일으킬 수 있습니다.
+- **저민감(low-sensitivity) 방향에 정렬**되어 있다면,
+  큰 파라미터 오차도 영향이 미미할 수 있습니다.
 
-Consequently:
+따라서 최적 압축은 다음 성질을 갖는 좌표계를 찾는 것입니다.
 
-> **Outliers are coordinate artifacts, not intrinsic carriers of information.**
-
-This interpretation explains why:
-
-- orthogonal rotations can remove outliers without affecting accuracy,
-- protecting outliers is often unnecessary.
+- 민감도가 소수 방향에 집중되고,
+- 나머지 방향은 거친 근사에도 견고한 좌표계입니다.
 
 ---
 
-## 8. Operator View as the Foundation of This Repository
+## 6. 저차원 구조와의 연결
 
-This repository adopts the operator-centric perspective as its foundation.
+경험적으로 학습된 LLM은 다음과 같은 성질을 보이는 것으로 알려져 있습니다.
 
-All subsequent concepts follow naturally:
+- 중복성(redundancy),
+- 평평한 최소점(flat minima),
+- 잡음에 대한 강인성(robustness).
 
-- manifold hypothesis for weights,
-- coordinate-relative outliers,
-- axis transformations vs. frequency transforms,
-- functional + residual decomposition,
-- rate–distortion–optimal quantization.
+이 성질들은 연산자 파라미터가 파라미터 공간에서 **저차원 매니폴드(다양체)** 근처에 놓인다는 가설과 잘 맞습니다.
 
-Understanding weights as operator parameters
-allows compression to be reframed as a problem of
-**choosing an appropriate coordinate system for parameterization**.
+이 경우:
+
+- 의미 있는 변화는 소수 방향에 갇혀 있고,
+- 많은 좌표는 중복되거나 약민감(weakly sensitive) 차원을 나타냅니다.
+
+이 관측은 저차원 구조를 명시적으로 드러내는 좌표계를 찾도록 동기를 부여합니다.
 
 ---
 
-## Takeaway
+## 7. 왜 아웃라이어가 “중요한 가중치”는 아닌가
 
-> **LLM weights are not data to be preserved,
-> but parameters of an operator to be reparameterized.**
+연산자 중심 관점에서는 큰 크기의 좌표가 반드시 고민감(high-sensitivity) 방향을 의미하지 않습니다.
 
-This simple shift in perspective resolves many apparent paradoxes
-in low-bit LLM quantization and enables a principled approach
-to compression based on geometry rather than heuristics.
+아웃라이어는 다음 상황에서 생길 수 있습니다.
+
+- 선택한 좌표축이 연산자 매니폴드와 잘 정렬되지 않을 때,
+- 곡률(curvature)이 소수의 축으로 강하게 투영될 때.
+
+따라서:
+
+> **아웃라이어는 정보의 본질적 운반자가 아니라 좌표계 인공물이다.**
+
+이 해석은 다음을 설명합니다.
+
+- 직교 회전으로 아웃라이어를 제거해도 정확도가 유지될 수 있고,
+- 아웃라이어 보호가 종종 불필요하다는 점.
+
+---
+
+## 8. 이 리포지토리의 기반으로서의 연산자 관점
+
+이 리포지토리는 연산자 중심 관점을 기반으로 삼습니다.
+
+이후의 개념들은 자연스럽게 따라옵니다.
+
+- 가중치에 대한 매니폴드 가설(manifold hypothesis),
+- 좌표계-상대적 아웃라이어,
+- 축 변환(axis transformations) vs 주파수 변환(frequency transforms),
+- 함수 성분 + 잔차(residual) 분해,
+- 레이트–왜곡(rate–distortion) 최적 양자화.
+
+가중치를 연산자 파라미터로 이해하면, 압축은 **적절한 파라미터화 좌표계를 선택하는 문제**로 재정의됩니다.
+
+---
+
+## 핵심 요약
+
+> **LLM 가중치는 보존해야 할 데이터가 아니라, 재매개변수화해야 할 연산자 파라미터다.**
+
+이 간단한 관점 전환은 저비트 LLM 양자화에서 보이는 여러 역설처럼 보이는 현상을 해소하고,
+휴리스틱이 아니라 기하(geometry)에 기반한 원칙적인 압축 접근을 가능하게 합니다.
 
 ---

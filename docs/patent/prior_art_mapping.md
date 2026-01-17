@@ -1,60 +1,200 @@
-# Prior Art Mapping
+# 선행기술 매핑(Prior Art Mapping)
 
-## Differentiation from Existing LLM Quantization and Compression Methods
-
----
-
-## 1. Purpose of This Document
-
-This document systematically compares the proposed
-**operator-coordinate-based compression framework**
-against representative prior art in LLM quantization and compression.
-
-The goal is to:
-
-- identify conceptual gaps in existing methods,
-- clarify the novelty of the proposed approach,
-- support patentability and academic differentiation.
+## 기존 LLM 양자화/압축 기법과의 차별점
 
 ---
 
-## 2. Categories of Prior Art
+## 1. 문서 목적
 
-Existing methods can be broadly classified into the following categories:
+이 문서는 제안하는 **연산자-좌표계 기반 압축 프레임워크**를
+LLM 양자화 및 압축 분야의 대표적 선행기술(prior art)과 체계적으로 비교합니다.
 
-1. Value-centric quantization methods
-2. Outlier-aware heuristics
-3. Rotation-based preprocessing
-4. Low-rank and structural approximations
+목표는 다음과 같습니다.
 
-Each category is analyzed below.
+- 기존 방법의 개념적 공백(gap) 식별
+- 제안 접근의 신규성(novelty) 명확화
+- 특허성 및 학술적 차별화 근거 제공
 
 ---
 
-## 3. Value-Centric Quantization Methods
+## 2. 선행기술 분류
 
-### Representative Works
+기존 방법들은 대략 다음 범주로 분류할 수 있습니다.
+
+1. 값(value) 중심 양자화
+2. 아웃라이어-인식(outlier-aware) 휴리스틱
+3. 회전 기반 전처리
+4. 저랭크/구조적 근사
+
+각 범주를 아래에서 분석합니다.
+
+---
+
+## 3. 값(value) 중심 양자화 방법
+
+### 대표 기법
 
 - GPTQ
 - SmoothQuant
-- Post-training uniform quantization schemes
+- 사후학습(post-training) 균일 양자화 기법들
 
-### Core Assumptions
+### 핵심 가정
 
-- Weights are treated as independent scalar values.
-- Magnitude correlates with importance.
-- Quantization error should be minimized per-value or per-group.
+- 가중치를 서로 독립인 스칼라 값으로 취급한다.
+- 크기(magnitude)가 중요도와 상관된다고 본다.
+- 양자화 오차는 값/그룹 단위로 최소화되어야 한다.
 
-### Limitations
+### 한계
 
-- Do not explain why large portions of weights can be quantized coarsely.
-- Rely on heuristics (clipping thresholds, group sizes).
-- Do not address coordinate dependence.
+- 가중치의 큰 부분이 거칠게(coarsely) 양자화되어도 되는 이유를 설명하지 못한다.
+- 휴리스틱(클리핑 임계값, 그룹 크기)에 의존한다.
+- 좌표계 의존성을 다루지 않는다.
 
-### Differentiation
+### 차별점
 
-| Aspect                | Prior Art           | Proposed Method               |
-| --------------------- | ------------------- | ----------------------------- |
-| Weight interpretation | Data values         | Operator parameters           |
-| Outlier handling      | Explicit protection | Coordinate reparameterization |
-| Theoretical basis     | Error minimization  |
+| 구분 | 선행기술 | 제안 프레임워크 |
+| --- | --- | --- |
+| 가중치 해석 | 데이터 값 | 연산자 파라미터 |
+| 아웃라이어 처리 | 명시적 보호 | 좌표계 재매개변수화 |
+| 이론적 기반 | 오차 최소화 | 기하학적 정렬 |
+
+---
+
+## 4. 아웃라이어-인식 및 혼합 정밀도(mixed precision) 방법
+
+### 대표 기법
+
+- INT8/FP16 혼합 스킴(mixed schemes)
+- 아웃라이어 채널 분리(outlier channel isolation)
+
+### 핵심 아이디어
+
+- 아웃라이어를 식별하고 별도로 처리한다.
+- 큰 크기의 가중치를 높은 정밀도로 보존한다.
+
+### 한계
+
+- 아웃라이어가 본질적으로 중요하다고 가정한다.
+- 시스템 복잡도를 증가시킨다.
+- 여전히 좌표계 의존적이다.
+
+### 차별점
+
+제안 접근은 아웃라이어를 정렬되지 않은 좌표계가 만든 인공물로 설명함으로써,
+아웃라이어를 “식별하거나 보호해야 하는” 필요 자체를 제거합니다.
+
+---
+
+## 5. 회전 기반 양자화(QuaRot, SpinQuant, KurTail)
+
+### 대표 기법
+
+- QuaRot (Hadamard 회전)
+- SpinQuant
+- KurTail
+
+### 핵심 아이디어
+
+- 직교 회전으로 가중치 분포를 평탄화(flattening)한다.
+- 균일 양자화 전에 아웃라이어를 줄인다.
+
+### 장점
+
+- 경험적으로 효과적이다.
+- 단순하며 하드웨어 친화적이다.
+
+### 한계
+
+- 회전을 휴리스틱 전처리로 취급한다.
+- 평탄화와 구조적 정렬(alignment)을 구분하지 않는다.
+- 계수 집중(concentration)을 유도하지 못한다.
+
+### 차별점
+
+| 구분 | 회전 기반 | 제안 프레임워크 |
+| --- | --- | --- |
+| 해석 | 분포 평탄화 | 좌표 기하(geometry) |
+| 목표 | 아웃라이어 제거 | 매니폴드 정렬 |
+| 압축 이득 | 양자화 안정성 | 엔트로피(레이트) 감소 |
+
+제안 프레임워크는 회전을 **베이스라인 정규화(normalization) 단계**로 위치시키며, 최종 해법으로 보지 않습니다.
+
+---
+
+## 6. 저랭크/구조적 근사 방법
+
+### 대표 기법
+
+- 저랭크 분해(low-rank factorization)
+- 프루닝(pruning)
+- 텐서 분해(tensor decomposition)
+
+### 핵심 아이디어
+
+- 랭크 감소 또는 희소성(sparsity)으로 중복성을 활용한다.
+
+### 한계
+
+- 아키텍처-특화인 경우가 많다.
+- 값 중심(value-centric)인 경우가 많다.
+- 좌표계를 명시적으로 고려하지 않는다.
+
+### 차별점
+
+제안 방법은 다음 방식으로 구조적 압축을 일반화합니다.
+
+- 저랭크 거동을 매니폴드 구조의 발현으로 재프레이밍하고,
+- 명시적 분해(factorization) 없이도 정렬(alignment)을 가능하게 합니다.
+
+---
+
+## 7. 선행연구에서의 매니폴드 가설
+
+매니폴드 가설은 다음에 대해 자주 논의되지만:
+
+- 활성값(activations),
+- 학습된 표현(learned representations),
+
+압축 목적에서 **연산자 파라미터(operator parameters)**에 직접 적용되는 경우는 드뭅니다.
+
+제안 발명은:
+
+- 매니폴드 관점을 가중치에 직접 적용하고,
+- 매니폴드 정렬을 양자화 및 엔트로피 코딩과 연결합니다.
+
+---
+
+## 8. 요약 표
+
+| 차원 | 선행기술 | 제안 프레임워크 |
+| --- | --- | --- |
+| 가중치 관점 | 스칼라 값 | 연산자 계수 |
+| 아웃라이어 의미 | 중요한 값 | 좌표계 인공물 |
+| 회전의 역할 | 휴리스틱 | 베이스라인 정규화 |
+| 정렬 개념 | 부재 | 중심 원리 |
+| 엔트로피 코딩 | 부차적 | 1차 목표 |
+| RD 최적성 | 암묵적 | 명시적 |
+
+---
+
+## 9. 특허성 관점의 시사점
+
+본 매핑이 뒷받침하는 신규 요소:
+
+- 아웃라이어의 좌표계-상대적 해석
+- 연산자 중심 압축 프레임워크
+- 회전(rotation)과 정렬(alignment)의 명시적 구분
+- 기하-인식 레이트–왜곡(rate–distortion) 최적화
+
+이 요소들은 인용된 선행기술에서 개별적으로도, 조합으로도 충분히 가르치거나 시사되지 않습니다.
+
+---
+
+## 10. 결론
+
+제안 접근은 값 중심 휴리스틱에서 기하학적이고 연산자-인식(operator-aware)인 압축으로의 개념적 전환을 제시합니다.
+
+아웃라이어를 좌표계 인공물로 규정하고 매니폴드-정렬 표현을 강조함으로써,
+본 발명은 이론적 명확성과 실용적 이점을 모두 확보합니다.
+
+---
