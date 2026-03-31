@@ -74,3 +74,43 @@ operator-coordinate-compression/
 
 - `experiments/axis_transform_analysis/`
 - `src/`
+
+---
+
+## 변경사항이 로컬에 안 보일 때 (클라우드 ↔ 로컬 동기화)
+
+이 저장소는 Codex 클라우드 환경에서 수정할 수 있으므로, **클라우드에서 만든 커밋이 로컬에 자동 반영되지는 않습니다.**
+아래 절차로 동기화하세요.
+
+1. 로컬 저장소에서 원격 확인
+
+   ```bash
+   git remote -v
+   ```
+
+2. 원격이 없다면 추가
+
+   ```bash
+   git remote add origin https://github.com/che-yjwj/operator-coordinate-compression
+   ```
+
+3. 최신 브랜치 가져오기
+
+   ```bash
+   git fetch origin
+   ```
+
+4. 작업 브랜치 체크아웃 후 동기화 (`work` 기준)
+
+   ```bash
+   git checkout work
+   git pull --ff-only origin work
+   ```
+
+5. 파일 존재 확인
+
+   ```bash
+   ls docs/turboquant_llm_quantization_architecture.md
+   ```
+
+> 참고: 로컬에서 같은 브랜치에 로컬 커밋이 이미 있으면 `git pull --rebase origin work`가 필요할 수 있습니다.
