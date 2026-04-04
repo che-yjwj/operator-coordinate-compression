@@ -2,7 +2,7 @@
 
 이 리포지토리는 LLM 압축이 본질적으로 **좌표계 선택**과 **연산자 재매개변수화(operator reparameterization)** 문제라고 주장합니다.
 
-- 심화 정리(TurboQuant + 실무 암묵지): `docs/turboquant_llm_quantization_architecture.md`
+- 심화 정리(TurboQuant + 실무 암묵지): `docs/theory/turboquant_llm_quantization_architecture.md`
 ## 권장 읽기 순서
 
 1. 개념 개요: `docs/overview.md`

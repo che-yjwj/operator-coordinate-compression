@@ -110,7 +110,7 @@ operator-coordinate-compression/
 5. 파일 존재 확인
 
    ```bash
-   ls docs/turboquant_llm_quantization_architecture.md
+   ls docs/theory/turboquant_llm_quantization_architecture.md
    ```
 
 > 참고: 로컬에서 같은 브랜치에 로컬 커밋이 이미 있으면 `git pull --rebase origin work`가 필요할 수 있습니다.
