@@ -59,6 +59,7 @@ operator-coordinate-compression/
 │  ├─ index.md
 │  ├─ overview.md
 │  ├─ theory/
+│  │  └─ turboquant_llm_quantization_architecture.md
 │  ├─ paper/
 │  └─ patent/
 ├─ experiments/
