@@ -1,348 +1,423 @@
-# LLM 양자화·압축 아키텍처 노트 (TurboQuant 중심)
+# LLM 양자화·압축 아키텍처 노트 (개선판, TurboQuant 중심)
 
-## 0) 이 문서의 목적
-
-이 문서는 두 가지를 동시에 수행한다.
-
-1. 현재 리포지토리(`operator-coordinate-compression`)가 제시하는 핵심 아이디어를 시스템 설계 관점에서 빠르게 복원한다.
-2. Google Research의 **TurboQuant**를, 논문 수준의 수학 직관 + 실무 배치 시 암묵지까지 포함해 구조적으로 정리한다.
-
-> 핵심 관점: “양자화는 값(value) 손실 최적화 문제가 아니라, 연산자(operator)와 좌표계(coordinate system) 선택 문제”라는 이 리포의 주장을 실제 KV-cache 압축 알고리즘(TurboQuant)까지 연결한다.
-
-### 문서 성격과 읽는 법
-
-- 이 문서는 **논문/블로그 내용을 요약한 부분**과 **이 저장소의 해석 및 실무 메모**를 함께 담는다.
-- 따라서 아래 서술 중 일부는 원문 요약이고, 일부는 본 저장소 관점에서의 해석이다.
-- 외부 사실 주장(알고리즘 구성, 성능 수치, 공개 시점)은 반드시 원문과 함께 읽어야 한다.
-- 참고 자료 섹션에 1차 출처 링크를 넣어 두었지만, 외부 공개용 문서로 쓰려면 본문 각 주장과 표/그림 번호까지 더 촘촘히 연결하는 편이 좋다.
+> **문서 상태:** 논문 직접 진술 / 시스템 해석 / 향후 실험 계획을 분리한 개선판
+> **문서 목적:** TurboQuant를 논문 수준에서 정확하게 복원하면서, 시스템 아키텍트 관점의 해석과 후속 연구 방향을 명확히 구분한다.
 
 ---
 
-## 1) 현재 코드베이스(문서베이스)의 아이디어 맵
+## 목차
 
-### 1.1 프로젝트의 North Star
-
-리포는 LLM 압축을 다음처럼 재정의한다.
-
-- 가중치는 독립 스칼라 집합이 아니라 **연산자 파라미터화**다.
-- 학습된 파라미터는 고차원 공간 전체가 아니라 **저차원 매니폴드 근방**에 존재한다.
-- outlier는 본질 신호라기보다 **좌표계-상대 인공물**이다.
-- Hadamard류는 “주파수 변환”이라기보다 **축 변환, 즉 정보 보존적 좌표계 회전**이다.
-- 랜덤 회전은 flattening(평탄화)은 잘 하지만, 진짜 압축 이득은 manifold-aligned coordinate에서 오는 concentration(집중)에서 나온다.
-
-즉 이 리포의 주제는 “low-bit 트릭 모음집”이 아니라, **표현좌표(표기법)의 기하학적 선택**이다.
-
-### 1.2 실무적으로 중요한 해석
-
-- 일반적인 양자화 운영은 보통 `scale/zero-point 튜닝`에 집착한다.
-- 이 리포 관점은 그보다 상위 레벨에서 “무슨 좌표축에서 scale을 잡는가?”를 먼저 본다.
-- 이 프레이밍은 KV cache, weight-only quant, activation quant, vector DB PQ를 하나의 공통 언어로 묶는다.
-
-### 1.3 코드베이스 상태 요약
-
-- 현재는 구현보다 **이론/실험 스펙 문서 중심**이다.
-- 토이 실험 spec(기저에 따른 압축성 차이)과 실제 LLM 검증 spec이 분리되어 있다.
-- 논문/특허 관점 문서까지 이미 배치되어 있어, 연구→제품화로 이어질 문맥이 명확하다.
+- [0. 이 문서의 목적과 읽는 법](#0-이-문서의-목적과-읽는-법)
+- [1. 빠른 총평](#1-빠른-총평)
+- [2. 논문 직접 진술 요약](#2-논문-직접-진술-요약)
+- [3. TurboQuant 핵심 구조](#3-turboquant-핵심-구조)
+- [4. 핵심 수학 직관](#4-핵심-수학-직관)
+- [5. PolarQuant / QJL / OPQ와의 관계 정리](#5-polarquant--qjl--opq와의-관계-정리)
+- [6. 시스템 아키텍처 관점 해석](#6-시스템-아키텍처-관점-해석)
+- [7. 실무 배치 체크리스트](#7-실무-배치-체크리스트)
+- [8. 이 리포의 장기 비전과 연결](#8-이-리포의-장기-비전과-연결)
+- [9. 검증 계획](#9-검증-계획)
+- [10. 핵심 용어 사전](#10-핵심-용어-사전)
+- [11. 참고 자료](#11-참고-자료)
+- [12. 사실/추론 경계 및 업데이트 메모](#12-사실추론-경계-및-업데이트-메모)
 
 ---
 
-## 2) TurboQuant 상세 정리
+## 0. 이 문서의 목적과 읽는 법
 
-### 2.1 TurboQuant의 문제 정의
+이 문서는 세 가지를 동시에 수행한다.
 
-TurboQuant는 고차원 벡터를 온라인(데이터 의존적 학습 없이)으로 저비트 압축하면서,
+1. **TurboQuant 원논문과 공식 블로그의 핵심 주장**을 왜곡 없이 복원한다.
+2. 이를 **KV-cache quantization / long-context serving / 시스템 아키텍처** 맥락에서 재해석한다.
+3. 현재 리포지토리의 "operator-coordinate-compression" 관점과 연결하되, **논문 직접 진술과 본 문서의 해석을 엄격히 분리**한다.
 
-- MSE 왜곡
-- inner-product 왜곡
+### 서술 규칙
 
-을 동시에 낮추려는 **고차원 벡터 압축 알고리즘**으로 이해할 수 있다.
+- **[FACT]**: TurboQuant 원논문, Google Research 공식 블로그, QJL/PolarQuant 원문에서 직접 확인 가능한 진술
+- **[INFERENCE]**: 본 문서의 시스템 해석, 아키텍처 해석, 연구 가설
+- **[PLAN]**: 아직 검증되지 않았지만 이후 실험으로 확인하려는 항목
 
-엄밀한 분류는 주의가 필요하다.
+### 이 문서의 핵심 원칙
 
-- 입력 대상은 벡터이지만,
-- 문서에서 설명하는 핵심 절차는 랜덤 회전 뒤의 **좌표별 scalar quantization**과 residual 보정에 가깝다.
-
-따라서 이 문서에서는 TurboQuant를 좁은 의미의 codebook-search 중심 VQ라기보다,
-**벡터를 대상으로 하지만 scalar quantization 중심으로 구현되는 압축 절차**로 서술한다.
-
-LLM에서는 특히 **KV cache quantization**에 적용되며, 긴 컨텍스트에서 메모리/대역폭 병목을 풀기 위한 목적이 강하다.
-
-### 2.2 핵심 구성: 2-stage
-
-TurboQuant는 크게 두 단계다.
-
-아래 내용은 이 문서가 이해한 구성 요약이며, 세부 구현/명칭은 원문 표현과 일치하는지 별도 대조가 필요하다.
-
-1. **MSE 중심 stage (PolarQuant 계열 아이디어 포함)**
-   - 벡터에 랜덤 회전을 적용
-   - 회전 후 좌표 분포 성질(Beta 집중/고차원 근사 독립성)을 활용
-   - 좌표별 scalar quantizer(Lloyd-Max) 적용
-
-2. **Bias 교정 stage (QJL 1-bit residual)**
-   - 1단계 잔차(residual)에 대해 1-bit QJL 적용
-   - MSE-최적 양자화가 만드는 inner-product bias를 보정
-   - attention logit/유사도 계산에서 편향 없는 추정기에 가깝게 구성
-
-요약하면:
-
-- stage1 = 에너지 대부분을 고효율로 압축
-- stage2 = 작은 비트(보통 1bit/channel budget)를 써서 “잘못된 방향의 오차”를 잡음
-
-### 2.3 왜 “회전 + 좌표별 양자화”가 먹히는가
-
-실무자가 놓치기 쉬운 포인트:
-
-- “좌표별 독립 quantizer는 구식”이라는 인식이 강하지만,
-- 고차원 랜덤 회전 이후 분포가 잘 섞이면 좌표 간 결합정보가 약해지고,
-- 이때 per-coordinate quantizer가 계산/배치/벡터화 측면에서 매우 강해진다.
-
-즉 TurboQuant는 복잡한 codebook search를 피하고,
-
-- 온라인성(학습 불필요)
-- 구현 단순성
-- 하드웨어 친화성
-
-을 이론보장과 같이 가져가려는 설계다.
-
-### 2.4 PolarQuant 역할
-
-PolarQuant는 좌표계를 Cartesian→Polar 계열로 재표현해,
-
-- 분포 예측 가능성 증가
-- 정규화 메타데이터(quant constants) 부담 감소
-
-를 노린다.
-
-현업 의미:
-
-- “값 자체 양자화”보다 “기하 파라미터(반지름/각도)의 통계 구조”를 양자화 대상으로 삼아 메타 오버헤드를 줄이는 전략이다.
-
-주의:
-
-- 이 절은 TurboQuant와 PolarQuant의 관계를 이해하기 위한 요약 메모다.
-- 실제 논문에서 두 기법의 관계가 정확히 어떤 수준의 선행 아이디어 차용인지, 혹은 별개 비교축인지 명확히 인용해 둘 필요가 있다.
-
-### 2.5 QJL residual 보정이 중요한 이유
-
-실무에서 흔한 함정:
-
-- MSE가 낮으면 attention 품질도 자동으로 좋을 거라 가정한다.
-- 하지만 attention은 dot-product 편향에 민감하고, 작은 systematic bias가 긴 문맥에서 누적된다.
-
-TurboQuant는 residual의 sign sketch(QJL)를 추가해 이 편향을 줄인다.
-
-### 2.6 보고된 성능 포인트(공식 공개 기준: 2025-04-28 논문, 2026-03-24 블로그)
-
-아래 항목은 공개된 논문/Google Research 블로그에서 전달하는 메시지를 **요약한 메모**다.
-정확한 수치, 벤치 설정, 하드웨어 조건은 원문 표/그림과 함께 확인해야 한다.
-
-확인한 1차 출처:
-
-- TurboQuant 논문: `https://arxiv.org/abs/2504.19874` (2025-04-28)
-- Google Research 블로그: `https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/` (2026-03-24)
-
-- KV cache를 3~3.5bit/channel 수준으로 압축하며 품질 손실 최소화/중립 사례 보고
-- long-context 벤치(Needle, LongBench 등)에서 강한 유지 성능
-- H100에서 attention-logit 계산 기준 큰 폭의 가속 사례 보고
-
-주의:
-
-- 특정 speedup 숫자는 “attention kernel 구간” 기준인지 “end-to-end tokens/s” 기준인지 반드시 분리해야 한다.
-- 프로덕션에서는 scheduler, paged KV, batch shape, prefill/decode mix 때문에 체감 성능이 크게 달라진다.
+- 논문이 말한 것과 내가 해석한 것을 섞지 않는다.
+- 알고리즘 성능과 서비스 성능을 동일시하지 않는다.
+- `커널 속도 향상`과 `E2E token/s 향상`을 구분한다.
+- `MSE 개선`과 `attention 품질 보존`을 구분한다.
 
 ---
 
-## 3) 실무 암묵지: Senior Engineer/System Architect 관점 체크리스트
+## 1. 빠른 총평
 
-### 3.1 알고리즘-시스템 경계
+TurboQuant는 단순한 "저비트 scalar quantization 기법"이 아니라, 다음 조합으로 보는 것이 정확하다.
 
-1. **알고리즘 승리 ≠ 서비스 승리**
-   - 논문은 왜곡률/리콜/task score를 본다.
-   - 서비스는 p99 latency, tail OOM, 배치 안정성, 장애 복구를 본다.
+- **랜덤 직교 회전**
+- **회전 후 좌표별 near-optimal scalar quantization**
+- **residual에 대한 1-bit QJL 보정**
+- **MSE distortion과 inner-product distortion 동시 제어**
+- **data-oblivious / online 적용 가능**
 
-2. **decode 단계와 prefill 단계를 분리해 측정**
-   - KV quant는 decode 메모리 병목 완화가 본진이다.
-   - prefill이 긴 workload에서는 기대 이득이 희석될 수 있다.
+[FACT] TurboQuant는 고차원 벡터를 저비트로 압축하면서 MSE와 inner-product distortion을 모두 줄이도록 설계된 온라인 벡터 압축 계열 방법이다. LLM에서는 특히 KV cache quantization에 적용된다.
 
-3. **메타데이터 오버헤드 회계 분리**
-   - “n-bit”만 보고 비교하면 함정.
-   - scale/zero-point, per-block norm, layout padding까지 합친 실제 bpc(bit per channel)를 봐야 한다.
-
-4. **정확도 metric의 지연 붕괴(drift) 감시**
-   - 짧은 시퀀스는 버티는데 긴 체인-of-thought에서 갑자기 무너지는 경우가 있다.
-   - multi-turn eval, retrieval stress를 함께 둬야 한다.
-
-### 3.2 배치/런타임 설계 팁
-
-- quant/dequant를 attention kernel과 최대한 fusion해 메모리 왕복을 줄인다.
-- paged KV(vLLM류)와 block size를 맞춰 misaligned access를 피한다.
-- mixed precision 정책(예: recent tokens FP16 유지)을 두어 tail-risk를 제어한다.
-- fallback path(특정 헤드/레이어만 고정밀도)를 준비해 incident 대응 시간을 줄인다.
-
-### 3.3 품질 관리 팁
-
-- `MSE`와 `logit KL`를 함께 본다.
-- needle retrieval + summarization + code completion을 분리 리포팅한다.
-- 모델별(아키텍처별) 민감도가 크게 다르므로 universal one-size를 가정하지 않는다.
+[INFERENCE] 시스템 관점에서 TurboQuant의 실질적 의미는 "복잡한 model-specific calibration 없이도, long-context decode에서 HBM 대역폭 병목을 줄일 수 있는 강한 범용 baseline"이라는 점이다.
 
 ---
 
-## 4) 핵심 용어 사전 (실무 약어/관용어/의사표준 포함)
+## 2. 논문 직접 진술 요약
 
-아래 표는 실무에서 자주 쓰는 표현을 포함해 정리했다. 각 항목마다 **왜 중요한지 / 언제 쓰는지 / 오해 리스크**를 명시한다.
+이 절은 원논문/공식 자료에서 직접 확인되는 핵심만 정리한다.
 
-| 용어 | 왜 중요한가 | 언제 쓰는가 | 잘못 이해하면 생기는 문제 |
-|---|---|---|---|
-| Quantization | 메모리·대역폭·연산량 절감의 기본 축 | 모델 서빙 최적화, 엣지 배포 | 비트수만 낮추면 무조건 이득이라 오판 |
-| PTQ (Post-Training Quantization) | 재학습 없이 적용 가능 | 모델 배포 직전 | calibration 생략 가능하다고 착각 |
-| QAT (Quantization-Aware Training) | 품질 보존 여지 큼 | 대규모 재학습 가능 조직 | 비용/복잡도 과소평가 |
-| Weight-only quant | 적용 난이도 낮음 | LLM 추론 가속 초기 단계 | activation 병목을 놓침 |
-| W/A quant (W8A8 등) | 연산량/메모리 동시 최적화 | 전용 커널 보유 시 | 커널 미지원으로 실제 성능 저하 |
-| KV cache quant | long-context 비용 핵심 절감 | decode 병목 워크로드 | prefill/decode 구분 없이 기대치 과대 |
-| VQ (Vector Quantization) | 고차원 구조 보존에 유리 | KV, retrieval index | codebook 오버헤드 누락 |
-| PQ (Product Quantization) | 검색 시스템 표준 압축 | vector DB/ANN | 오프라인 학습비용 무시 |
-| OPQ | 회전+PQ로 왜곡 감소 | 검색 품질 개선 | 회전비용/온라인성 제약 간과 |
-| RQ (Residual Quantization) | 단계적 오차 보정 | 초저비트 설계 | 지연 증가를 과소평가 |
-| Scalar quant | 구현·벡터화 용이 | 실시간 추론 | 고차 상관구조 손실 무시 |
-| Lloyd-Max | 분포 적합 scalar codebook | 사전 코드북 생성 | 데이터 분포 이동에 취약 |
-| Codebook | 양자화 중심 표현 | VQ/PQ 공통 | 메모리/캐시 locality 손실 |
-| Quant constants | scale/offset/norm 메타값 | block/group quant | 실제 압축률 과대평가 |
-| bpc (bit per channel) | 공정 비교 지표 | KV quant 비교 | 메타비트 제외한 허수 비교 |
-| Distortion-rate | 이론적 효율 척도 | 알고리즘 비교 | 실제 시스템비용 반영 누락 |
-| MSE distortion | 재구성 오차 기본지표 | quant 설계/튜닝 | attention 편향 문제 은폐 |
-| Inner-product distortion | attention/retrieval 품질과 직접 연관 | KV/ANN 평가 | MSE만으로 대체 가능하다고 착각 |
-| Unbiased estimator | 누적편향 완화 | 긴 시퀀스 attention | 분산 증가 trade-off 무시 |
-| QJL | 1-bit 스케치 기반 보정 | residual 보정 | 원신호 대체 알고리즘으로 오해 |
-| Residual | 1차 quant의 남은 오차 | 2-stage quant | residual scale 폭주 관리 실패 |
-| Random rotation | outlier 평탄화·분포 혼합 | TurboQuant/OPQ류 | “주파수 변환”으로 잘못 해석 |
-| Hadamard rotation | 저비용 직교변환 | 고속 전처리 | 회전 자체가 압축이라고 오해 |
-| Incoherence | 좌표 편중 완화 지표 | 회전 기반 quant 논의 | 해석 없이 수치만 추종 |
-| Outlier channel | 저비트 파괴의 주범 | activation/KV 분석 | 무조건 clipping으로 해결 시도 |
-| Clipping | tail 제거 | scalar quant 기본 | 과도 clipping으로 정보 손실 |
-| Per-channel quant | 채널 이질성 대응 | activation/KV | 구현복잡도·메타비트 급증 |
-| Per-token quant | 시점별 분포 대응 | KV value quant | 커널 비효율/메타 증가 |
-| Asymmetric quant | zero-point로 bias 보정 | 비대칭 분포 | dequant 비용 증가 간과 |
-| Symmetric quant | 커널 단순성 | GPU 고속경로 | 편향 데이터에서 품질 손실 |
-| Group size | 메타비트/정밀도 trade-off 핵심 | block/group quant | 기본값 고정으로 성능 미스 |
-| Block quant | locality 단위 압축 | KV pages/tiles | block 경계 인공물 방치 |
-| Calibration | scale 결정 신뢰성 | PTQ 워크플로우 | 샘플 편향으로 실서비스 붕괴 |
-| Data-oblivious | 온라인성·즉시성 | 실시간 KV | 특정 분포에서 성능 과신 |
-| Data-dependent | 품질 잠재력 높음 | 오프라인 인덱싱 | 인덱스 재생성 비용 폭증 |
-| Online quantization | 스트리밍 적용 가능 | token-by-token decode | 상태 누수/지연 누적 문제 |
-| Streaming quantization | 생성 중 지속 압축 | 긴 대화형 추론 | warm-up 구간만 보고 판단 |
-| Prefill vs Decode | 병목 위치가 다름 | 성능 프로파일링 | 전체 TPS 해석 오류 |
-| Paged KV cache | 메모리 단편화 완화 | vLLM류 런타임 | quant block과 불일치 |
-| HBM bottleneck | 대역폭 지배 병목 | GPU 추론 | FLOPs 최적화만 집착 |
-| SRAM reuse | 실제 속도 좌우 | fused kernel 최적화 | 메모리 계층 무시한 설계 |
-| Kernel fusion | 메모리 왕복 절감 | quant+matmul+attention | 디버깅/유지보수 난이도 급증 |
-| Memory-bound | KV/attention 특성 | 시스템 병목 진단 | compute-bound 가정으로 오판 |
-| Roofline | 이론상 한계 분석 | 커널 최적화 | 실제 runtime overhead 무시 |
-| Tail latency (p99) | 서비스 품질 핵심 | SLO 운영 | 평균지표만 보고 배포 |
-| Quality neutrality | “무손실에 가까움” 커뮤니케이션 키워드 | 제품 보고서/릴리즈 | 테스트 커버리지 부족 은폐 |
-| Needle-in-a-haystack | long-context 회수력 테스트 | KV quant 벤치 | 단일 벤치 과적합 |
-| LongBench | 멀티태스크 장문 벤치 | 모델 비교 | 실트래픽 대표성 과대해석 |
-| RULER / L-Eval / ZeroSCROLLS | 장문 추론 보완 벤치 | 일반화 검증 | 데이터 중복/누수 간과 |
-| Drift | 장시간 품질 저하 | 멀티턴/에이전트 | 초기구간 OK로 안정성 착각 |
-| Regression gate | 배포 품질 관문 | CI/CD inference | metric 선정 부실 |
-| Rollback-safe | 장애시 복귀 가능성 | 프로덕션 배포 | one-way schema 변경으로 장애 장기화 |
-| Canary | 점진 배포 | quant 정책 전환 | 표본 편향으로 오판 |
-| Blast radius | 장애 영향 범위 | 아키텍처 설계 | 범위 격리 실패 |
-| SLA/SLO | 운영 목표 | 서비스 품질 관리 | 연구지표만으로 의사결정 |
-| Manifold-aligned coords | 이 리포의 핵심 개념 | 차세대 압축 설계 | 랜덤 회전만으로 충분하다고 오해 |
-| Flattening vs Concentration | 회전의 한계와 정렬의 목표 구분 | 알고리즘 비교 프레임 | 둘을 동일개념으로 혼동 |
-| Functional + residual decomposition | 구조/잔차 비대칭 부호화 가능 | 고압축 설계 | 잔차만 줄이면 된다고 오판 |
-| RD (Rate-Distortion) design | 비트배분 최적화 프레임 | 알고리즘·시스템 동시설계 | kernel/metadata 제외한 이론최적 집착 |
+### 2.1 문제 정의
+
+[FACT] TurboQuant는 온라인 설정에서 고차원 벡터를 압축할 때, 단순 재구성 오차(MSE)만이 아니라 **inner product 왜곡**까지 함께 줄이는 것을 목표로 한다.
+
+[FACT] 이 문제는 LLM KV cache, 특히 긴 컨텍스트에서의 attention 계산에 직접 연결된다. 이유는 attention logit이 본질적으로 dot-product 기반이기 때문이다.
+
+### 2.2 방법의 큰 구조
+
+[FACT] TurboQuant는 두 단계 구조로 이해할 수 있다.
+
+1. **랜덤 직교 회전 후 scalar quantization**
+2. **residual에 대한 1-bit QJL 기반 보정**
+
+### 2.3 핵심 장점
+
+[FACT] 원논문/공식 자료가 강조하는 포인트는 다음과 같다.
+
+- data-oblivious
+- online 적용 가능
+- near-optimal distortion rate
+- low-bit에서도 quality 유지
+- KV cache 압축에서 강한 성능
+
+### 2.4 성능 관련 직접 표현
+
+[FACT] 원논문 abstract는 대략 다음 메시지를 준다.
+
+- **3.5 bpc 부근에서 quality neutrality**
+- **2.5 bpc 부근에서도 marginal degradation**
+- **KV cache 5x 이상 압축**
+- **attention 관련 커널 구간에서 큰 속도 이점 가능**
+
+[FACT] Google Research 블로그는 더 강한 표현으로 효율과 품질 보존을 강조하지만, 실무 문서에서는 **논문 표/그림 기준**으로 다시 확인하는 것이 안전하다.
 
 ---
 
-## 5) TurboQuant를 이 리포의 이론과 연결하기
+## 3. TurboQuant 핵심 구조
 
-### 5.1 연결점
+### 3.1 개념도
 
-- 이 리포: outlier는 좌표계 인공물, 회전은 flattening.
-- TurboQuant: 랜덤 회전 후 per-coordinate quantizer로 near-optimal distortion을 노림.
+```text
+입력 벡터 x ∈ R^d
+   |
+   v
+[Random Orthogonal Rotation]
+   y = R x
+   |
+   v
+[Per-coordinate Scalar Quantization]
+   q = Q(y)
+   r = y - q
+   |
+   +---------------> 저장: 주 압축 표현 q
+   |
+   v
+[1-bit QJL over residual]
+   s = sign(r)  (+ estimator 구성에 필요한 규칙)
+   |
+   v
+압축 표현: (q, s)
+```
 
-이 문서의 해석으로는, TurboQuant는 이 리포의 “axis transform 관점”과 정합적으로 읽을 수 있다.
+### 3.2 단계별 역할
 
-### 5.2 차이점(중요)
+#### Stage 1: 회전 + 좌표별 scalar quantization
 
-- 이 리포는 **manifold-aligned coordinate**까지 가야 진짜 concentration/압축성 이득을 본다고 주장.
-- TurboQuant의 핵심은 랜덤 회전 기반 온라인 보장.
+[FACT] 랜덤 회전 후 좌표 분포가 집중되고 균질해지므로, 각 좌표별 scalar quantizer가 강력해진다.
 
-이 문서의 해석:
+[INFERENCE] 즉, TurboQuant의 핵심은 "복잡한 전역 코드북 탐색"보다, **회전으로 분포를 다루기 쉬운 형태로 만든 뒤 단순한 quantizer를 강하게 만드는 것**에 있다.
 
-- TurboQuant는 랜덤 회전 기반의 범용적 baseline으로 읽을 수 있다.
-- 반면 이 리포의 장기 비전은 회전만이 아니라 manifold-aligned representation까지 포함한다.
-- 따라서 두 접근은 경쟁 관계라기보다, 동일한 좌표계 프레임 안에서 서로 다른 지점을 차지하는 것으로 정리하는 편이 안전하다.
+#### Stage 2: residual에 대한 1-bit 보정
 
----
+[FACT] MSE-optimal quantization만으로는 inner product estimation에 bias가 남을 수 있다. TurboQuant는 residual에 대해 1-bit QJL을 결합해 unbiased inner-product estimation을 구성한다.
 
-## 6) 실전 적용 권고안 (아키텍트 관점)
-
-1. **1차 도입**: TurboQuant류 온라인 quant를 KV cache에 적용해 메모리 병목 즉시 완화.
-2. **2차 최적화**: 모델/레이어별 민감도 기반 mixed policy(예: key/value 비트 분리, recent token 보호).
-3. **3차 연구**: manifold-aligned basis 근사(PCA/저랭크/클러스터 공유기저)와 TurboQuant를 결합.
-4. **운영 안정화**: canary + rollback + long-context drift 모니터링 파이프라인 필수.
-
----
-
-## 7) 참고 자료
-
-아래 링크는 이 문서에서 직접 언급하거나, 용어 사전과 해석 문맥을 이해하는 데 핵심인 1차 자료 위주로 정리했다.
-
-### TurboQuant / QJL / PolarQuant
-
-1. TurboQuant: Online Vector Quantization with Near-optimal Distortion Rate
-   - `https://arxiv.org/abs/2504.19874`
-
-2. Google Research Blog, TurboQuant: Redefining AI efficiency with extreme compression
-   - `https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/`
-
-3. QJL: 1-Bit Quantized JL Transform for KV Cache Quantization with Zero Overhead
-   - `https://arxiv.org/abs/2406.03482`
-
-4. PolarQuant: Quantizing KV Caches with Polar Transformation
-   - `https://arxiv.org/abs/2502.02617`
-
-### 관련 배경 자료
-
-5. Optimized Product Quantization for Approximate Nearest Neighbor Search
-   - CVPR 2013 open-access page: `https://openaccess.thecvf.com/content_cvpr_2013/html/Ge_Optimized_Product_Quantization_2013_CVPR_paper.html`
-
-6. Optimized Product Quantization
-   - TPAMI article metadata: `https://pubmed.ncbi.nlm.nih.gov/26353197/`
-
-### 후속 보강 메모
-
-- TurboQuant 논문에서 실제 성능 수치가 나온 표/그림 번호를 본문 각 항목에 역참조로 추가하면 문서 신뢰성이 더 올라간다.
-- QJL과 PolarQuant의 TurboQuant 내 역할은 현재 요약 수준이므로, 추후 원문 섹션 번호까지 적어 두는 편이 좋다.
+[INFERENCE] 이 단계는 단순 재구성 보정이 아니라, **attention logit의 통계적 편향을 직접 겨냥한 보정**으로 이해하는 것이 맞다.
 
 ---
 
-## 8) 사실/추론 경계와 1차 출처(Primary Sources)
+## 4. 핵심 수학 직관
 
-이 문서는 아래 원칙으로 읽어야 한다.
+### 4.1 왜 랜덤 회전이 중요한가
 
-- **사실(fact)**: TurboQuant 원논문(arXiv:2504.19874)과 Google Research 공식 블로그(2026-03-24)에서 직접 확인 가능한 진술
-- **추론(inference)**: 본 리포의 연산자/좌표계 관점을 TurboQuant에 매핑한 시스템 설계 해석
+랜덤 직교 회전 \( R \in \mathbb{R}^{d \times d} \)를 적용하면,
 
-### 8.1 1차 출처
+\[
+y = Rx
+\]
 
-1. **TurboQuant 논문 (arXiv, 제출일 2025-04-28)**
-   - 제목: *TurboQuant: Online Vector Quantization with Near-optimal Distortion Rate*
-   - 핵심: 랜덤 회전 + 좌표별 스칼라 양자화 + residual에 대한 1-bit QJL 보정이라는 2-stage 구성
+원래 특정 좌표에 집중되어 있던 큰 값(outlier)이 여러 축으로 퍼진다.
 
-2. **Google Research 공식 블로그 (게시일 2026-03-24)**
-   - 제목: *TurboQuant: Redefining AI efficiency with extreme compression*
-   - 핵심: 제품/시스템 관점 메시지(3-bit KV, long-context 벤치, H100 attention-logit 구간 가속)를 대외 커뮤니케이션
+[FACT] 원논문은 이 회전 뒤 좌표 분포가 **concentrated Beta distribution** 계열로 다뤄질 수 있음을 강조한다.
 
-3. **PolarQuant (arXiv/Google Research publications)**
-   - TurboQuant의 stage-1 직관을 이해하는 데 필요한 배경(랜덤 preconditioning + polar transform + quant constants 오버헤드 절감 논점)
+[INFERENCE] 실무 직관으로는 다음처럼 이해하면 된다.
 
-### 8.2 실무 적용 시 주의(암묵지 보강)
+- 원 좌표계: 어떤 채널은 너무 크고 어떤 채널은 너무 작다.
+- 회전 후 좌표계: 에너지가 여러 축에 섞여 들어간다.
+- 결과: per-coordinate quantization이 훨씬 잘 먹힌다.
 
-- 블로그 수치(예: 최대 8x)는 **커널 구간(metric scope)** 기준일 수 있으므로, E2E token/s로 등치하면 안 된다.
-- “무손실” 표현은 벤치/모델/워크로드 의존이다.
-  - 운영에서는 반드시 **모델군별 canary + rollback-safe path**를 함께 설계해야 한다.
-- KV quant 성능은 런타임(Paged KV, block size, prefill/decode mix)에 의해 크게 흔들린다.
-  - 즉 알고리즘 설명만 맞아도 운영 성과가 자동으로 보장되지는 않는다.
+### 4.2 Gaussian이라고 말해도 되는가
+
+[INFERENCE] "회전 후 각 좌표가 Gaussian이 된다"는 표현은 직관으로는 유용하지만, 엄밀한 문서에서는 주 표현으로 쓰기보다 보조 설명으로 두는 것이 좋다.
+
+권장 표현:
+
+> 랜덤 회전 후 좌표 마진 분포는 이론적으로 집중된 Beta 계열로 기술되며, 고차원에서는 Gaussian-like intuition으로 이해할 수 있다.
+
+### 4.3 왜 MSE만 보면 안 되는가
+
+attention에서 중요한 값은
+
+\[
+\langle q_i, k_j \rangle
+\]
+
+이다. 따라서 벡터 재구성이 조금 틀린 것보다, **dot-product의 systematic bias**가 더 위험할 수 있다.
+
+[FACT] TurboQuant는 이 점 때문에 residual에 1-bit QJL을 추가해 inner-product estimator의 bias를 제거하는 방향을 취한다.
+
+---
+
+## 5. PolarQuant / QJL / OPQ와의 관계 정리
+
+### 5.1 QJL
+
+[FACT] QJL은 1-bit quantized Johnson-Lindenstrauss transform 계열로, 저비트 스케치만으로 inner product estimation을 가능하게 하는 방향의 방법이다.
+
+[FACT] TurboQuant에서는 residual에 대해 QJL을 결합해 unbiased inner-product estimation을 만든다.
+
+### 5.2 PolarQuant
+
+[FACT] PolarQuant는 random preconditioning 뒤 polar transformation을 적용해, normalization overhead와 quantization constants 부담을 줄이는 방향의 관련 방법이다.
+
+[INFERENCE] PolarQuant를 TurboQuant의 완전한 하위 단계라고 단정하기보다는, **Google 측이 함께 제시하는 관련 기법군** 또는 Stage-1 계열의 중요한 배경 작업으로 이해하는 것이 안전하다.
+
+### 5.3 OPQ와의 관계
+
+[FACT] OPQ는 product quantization 전에 회전을 최적화해 distortion을 줄이는 고전적 접근이다.
+
+[INFERENCE] TurboQuant와 OPQ는 모두 "회전이 압축 성능을 바꾼다"는 점에서 연결되지만, 목적과 제약은 다르다.
+
+- OPQ: 오프라인 학습, retrieval/index 쪽 맥락이 강함
+- TurboQuant: data-oblivious, online, KV-cache serving 친화적
+
+---
+
+## 6. 시스템 아키텍처 관점 해석
+
+이 절은 본 문서의 해석이다.
+
+### 6.1 왜 KV cache에서 특히 중요한가
+
+[INFERENCE] long-context LLM serving에서는 decode 구간에서 KV cache 읽기 트래픽이 HBM 병목으로 올라오는 경우가 많다. 이때 KV를 16-bit/8-bit로 계속 읽는 대신, 3~4 bpc 수준으로 낮추면 메모리 트래픽을 크게 줄일 수 있다.
+
+### 6.2 그러나 알고리즘 이득이 곧바로 서비스 이득은 아니다
+
+다음 항목을 분리해야 한다.
+
+- 커널 구간 속도 향상
+- attention 전체 구간 속도 향상
+- decoder token/s 향상
+- 전체 서비스 p99 latency 향상
+
+[INFERENCE] TurboQuant류 방법은 대개 **메모리 병목이 강한 decode-heavy workload**에서 이득이 크고, prefill 비중이 큰 workload에서는 체감 이득이 약해질 수 있다.
+
+### 6.3 실제 런타임에서 봐야 할 항목
+
+- 저장 포맷: per-token / per-head / per-block
+- 메타데이터: scale, normalization, sign sketch, padding
+- paged KV block size와 정렬
+- recent tokens를 FP16으로 유지할지 여부
+- attention kernel과 quant/dequant를 fuse할지 여부
+
+### 6.4 NPU / accelerator 관점의 블록 해석
+
+[INFERENCE] 하드웨어 관점에서는 다음 세 가지 질문이 중요하다.
+
+1. 회전을 어디서 수행할 것인가?
+   - host pre-process
+   - load-time transform
+   - kernel 내부 fused transform
+
+2. dequant를 할 것인가, 아니면 dot-product를 직접 근사할 것인가?
+   - dequant 후 GEMV/GEMM
+   - compressed representation에서 직접 logit 추정
+
+3. residual sign sketch를 어떤 실행 자원에 배치할 것인가?
+   - vector lane
+   - scalar assist
+   - dedicated micro-kernel
+
+---
+
+## 7. 실무 배치 체크리스트
+
+### 7.1 측정 관점
+
+- [ ] prefill / decode를 분리 측정했는가
+- [ ] 평균 latency뿐 아니라 p95 / p99를 봤는가
+- [ ] `nominal bitwidth`가 아니라 **실제 bpc**를 계산했는가
+- [ ] MSE뿐 아니라 logit KL, retrieval accuracy, long-context metric을 같이 봤는가
+
+### 7.2 런타임 관점
+
+- [ ] paged KV와 quant block size가 정렬되는가
+- [ ] recent tokens fallback 정책이 있는가
+- [ ] 특정 layer/head만 고정밀 유지하는 escape hatch가 있는가
+- [ ] canary / rollback-safe path가 준비되어 있는가
+
+### 7.3 장애 관점
+
+- [ ] 긴 multi-turn 세션에서 drift를 모니터링하는가
+- [ ] short benchmark는 통과하지만 long-context에서 무너지는 패턴을 따로 보는가
+- [ ] kernel-level speedup과 service-level KPI를 구분해서 리포트하는가
+
+---
+
+## 8. 이 리포의 장기 비전과 연결
+
+이 절은 연구 가설이다.
+
+### 8.1 좌표계 선택 연속선
+
+```text
+원 좌표계
+   |
+   +-- 랜덤 회전 기반 좌표계
+   |      +-- TurboQuant
+   |          - data-oblivious
+   |          - online
+   |          - flattening
+   |
+   +-- manifold-aligned 좌표계
+          +-- operator-coordinate-compression의 장기 비전
+              - 데이터/모델 구조 반영
+              - concentration 극대화 목표
+              - 일부 오프라인 비용 허용 가능
+```
+
+### 8.2 해석
+
+[INFERENCE] 본 문서에서는 TurboQuant를 "좌표계 선택 연속선" 위의 매우 강한 범용 baseline으로 본다.
+
+[INFERENCE] 랜덤 회전은 flattening에는 강하지만, 장기적으로는 모델/레이어/헤드 구조를 반영한 manifold-aligned basis가 더 낮은 bit budget에서 유리할 가능성이 있다.
+
+### 8.3 핵심 연구 가설
+
+[PLAN] 동일한 bit budget에서 manifold-aligned basis가 random rotation보다 더 빠른 residual energy decay를 보일 수 있다.
+
+[PLAN] 이 가설이 맞다면,
+
+- 더 낮은 bpc
+- 더 작은 logit bias
+- 더 좋은 long-context stability
+
+를 동시에 얻을 수 있다.
+
+---
+
+## 9. 검증 계획
+
+### 9.1 알고리즘 검증
+
+- **실험 A:** no rotation vs random rotation vs structured Hadamard vs learned basis
+- **실험 B:** 동일 bpc에서 MSE / inner-product distortion / logit KL 비교
+- **실험 C:** residual sign sketch 유무에 따른 long-context degradation 비교
+
+### 9.2 시스템 검증
+
+- **실험 D:** prefill-heavy vs decode-heavy workload 분리 측정
+- **실험 E:** kernel fusion 유무에 따른 실제 token/s 비교
+- **실험 F:** paged KV block alignment가 성능에 주는 영향 측정
+
+### 9.3 아키텍처 검증
+
+- **실험 G:** dequant-then-dot vs compressed-domain dot 근사 비교
+- **실험 H:** NPU simulator에서 bandwidth savings와 latency savings 분리 계수화
+- **실험 I:** recent-token FP16 fallback 정책의 품질/성능 trade-off 측정
+
+---
+
+## 10. 핵심 용어 사전
+
+### 10.1 알고리즘
+
+| 용어 | 의미 | 주의 |
+| --- | --- | --- |
+| PTQ | 재학습 없이 적용하는 quantization | calibration 비용을 과소평가하기 쉬움 |
+| QAT | quantization-aware training | 품질은 좋지만 재학습 비용 큼 |
+| KV cache quantization | KV cache를 저비트로 압축 | decode 병목과 직접 연결 |
+| Lloyd-Max quantizer | 주어진 분포에서 scalar quantization 왜곡을 줄이는 양자화기 | 분포 변동에 민감 |
+| QJL | 1-bit 스케치 기반 inner-product estimation 기법 | 단순 보조 메타데이터가 아니라 estimator 구성 요소 |
+| PolarQuant | polar transformation 기반 KV-cache quantization 관련 방법 | TurboQuant와 동일시 금지 |
+
+### 10.2 시스템
+
+| 용어 | 의미 | 주의 |
+| --- | --- | --- |
+| bpc | bit per channel. 메타데이터 포함 실제 압축률 지표 | nominal bitwidth와 혼동 금지 |
+| paged KV cache | KV cache를 페이지 단위로 관리하는 런타임 구조 | quant block 정렬 중요 |
+| kernel fusion | 여러 단계를 한 커널로 결합 | 성능 향상 가능하지만 디버깅 어려움 |
+| memory-bound | 대역폭이 주 병목인 상태 | FLOPs만 보고 최적화하면 실패 |
+| rollback-safe | 장애 시 즉시 복귀 가능한 설계 | 운영 안정성 핵심 |
+
+### 10.3 이 리포의 연구 개념
+
+| 용어 | 의미 | 주의 |
+| --- | --- | --- |
+| operator parameterization | 가중치/표현을 독립 스칼라가 아니라 연산자 구조로 보는 관점 | 단순 행렬 분해와 동일시 금지 |
+| manifold-aligned coordinates | 데이터/모델 구조에 정렬된 좌표계 | 아직 연구 가설 영역 |
+| flattening | 회전으로 outlier를 퍼뜨리는 효과 | concentration과 구분 필요 |
+| concentration | 특정 좌표계에서 정보/에너지가 더 효율적으로 모이는 현상 | 본 문서의 장기 비전 핵심 |
+
+---
+
+## 11. 참고 자료
+
+1. TurboQuant: *Online Vector Quantization with Near-optimal Distortion Rate*
+   <https://arxiv.org/abs/2504.19874>
+
+2. Google Research Blog: *TurboQuant: Redefining AI efficiency with extreme compression*
+   <https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/>
+
+3. QJL: *1-Bit Quantized JL Transform for KV Cache Quantization with Zero Overhead*
+   <https://arxiv.org/abs/2406.03482>
+
+4. PolarQuant: *Quantizing KV Caches with Polar Transformation*
+   <https://arxiv.org/abs/2502.02617>
+
+5. OPQ: *Optimized Product Quantization for Approximate Nearest Neighbor Search*
+   <https://openaccess.thecvf.com/content_cvpr_2013/html/Ge_Optimized_Product_Quantization_2013_CVPR_paper.html>
+
+6. StreamingLLM
+   <https://arxiv.org/abs/2309.17453>
+
+---
+
+## 12. 사실/추론 경계 및 업데이트 메모
+
+### 12.1 경계 재확인
+
+- TurboQuant의 구체 구성, 품질, 성능 관련 서술은 **논문/공식 블로그 기준**
+- "좌표계 선택 연속선", "manifold-aligned basis", "operator-coordinate-compression과의 연결"은 **본 문서의 해석**
+- manifold-aligned basis가 random rotation보다 낫다는 주장은 **아직 연구 가설**
+
+### 12.2 후속 업데이트 권장 항목
+
+- TurboQuant 원논문 표/그림 번호를 본문 각 주장에 직접 연결
+- PolarQuant가 TurboQuant 본문에서 어느 위치로 인용되는지 섹션 번호 명시
+- toy experiment 결과를 8장과 9장에 반영
+- 실제 kernel benchmark와 E2E serving benchmark를 분리 리포트
+
+### 12.3 한 줄 결론
+
+> TurboQuant는 "랜덤 회전 + scalar quantization + residual 1-bit QJL"의 결합으로, 온라인 KV-cache 압축에서 매우 강한 범용 baseline이다.
+> 본 리포의 장기 비전은 여기서 한 걸음 더 나아가, 랜덤 회전 대신 manifold-aligned coordinate를 통해 더 낮은 bit budget과 더 나은 long-context stability를 얻을 수 있는지 검증하는 것이다.

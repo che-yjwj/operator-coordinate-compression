@@ -140,6 +140,7 @@ W_i \approx f_\theta(i) + r_i
 - 매니폴드-정렬 축의 실용적 근사,
 - 구조 성분과 잔차 성분의 비대칭(asymmetric) 양자화,
 - 회전/양자화/엔트로피 코딩을 하나의 좌표계 중심 프레임으로 통합.
+- 그리고 이 프레임을 외부 사례(TurboQuant)와 연결해, **논문 직접 진술 / 시스템 해석 / 검증 계획**을 분리해 읽는 문서화 방식을 실험한다.
 
 ---
 
@@ -150,5 +151,6 @@ W_i \approx f_\theta(i) + r_i
 ## 다음 읽을거리
 
 - 이론: `docs/theory/operator_view.md`, `docs/theory/coordinate_relative_outliers.md`, `docs/theory/rotation_vs_alignment.md`, `docs/theory/manifold_alignment.md`
+- TurboQuant 개선판: `docs/theory/turboquant_llm_quantization_architecture.md`
 - 논문 초안: `docs/paper/paper_draft.md`
 - 토이 실험 스펙: `experiments/toy_basis_vs_mlp/spec.md`

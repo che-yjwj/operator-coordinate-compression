@@ -2,7 +2,7 @@
 
 이 리포지토리는 LLM 압축이 본질적으로 **좌표계 선택**과 **연산자 재매개변수화(operator reparameterization)** 문제라고 주장합니다.
 
-- 심화 정리(TurboQuant + 실무 암묵지): `docs/theory/turboquant_llm_quantization_architecture.md`
+- 심화 정리(TurboQuant 개선판: 논문 직접 진술 / 시스템 해석 / 검증 계획 분리): `docs/theory/turboquant_llm_quantization_architecture.md`
 
 ## 권장 읽기 순서
 
@@ -11,7 +11,7 @@
 3. 아웃라이어를 좌표계 인공물로 보기: `docs/theory/coordinate_relative_outliers.md`
 4. 회전 vs 정렬(평탄화 vs 집중): `docs/theory/rotation_vs_alignment.md`
 5. “매니폴드 정렬”의 의미와 실용적 근사: `docs/theory/manifold_alignment.md`
-6. TurboQuant 심화 노트(외부 사례를 현재 프레임에 연결): `docs/theory/turboquant_llm_quantization_architecture.md`
+6. TurboQuant 개선판(논문 직접 진술, 시스템 해석, 후속 검증 계획): `docs/theory/turboquant_llm_quantization_architecture.md`
 7. 논문 초안(통합 서사): `docs/paper/paper_draft.md`
 
 ## 실험(스펙)
